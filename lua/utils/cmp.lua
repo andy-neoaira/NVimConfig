@@ -26,6 +26,7 @@ M.actions = {
   end,
   --- 接受 Copilot 内联建议（仅在可见时处理）
   ai_accept = function()
+    if vim.bo.filetype == "markdown" then return end
     local ok, sug = pcall(function() return require("copilot.suggestion") end)
     if ok and sug.is_visible() then
       GlobalUtil.create_undo()

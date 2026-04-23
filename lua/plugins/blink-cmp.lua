@@ -315,6 +315,8 @@ return {
 					copilot = {
 						name = "copilot",
 						module = "blink-copilot",
+					-- only enable copilot source when not in markdown files
+					enabled = function() return vim.bo.filetype ~= "markdown" end,
 						-- score_offset = 100：大幅提高排序分数，确保 Copilot 建议始终靠前显示；
 						-- blink 的最终排序 = 基础分 + score_offset，100 足以超过 LSP/buffer
 						score_offset = 100,
