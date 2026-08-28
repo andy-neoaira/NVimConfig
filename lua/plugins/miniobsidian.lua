@@ -1,7 +1,7 @@
 return {
 	{
 		"andy-neoaira/miniobsidian.nvim",
-		dev = true, -- 从 ~/github/miniobsidian.nvim 加载本地源码
+		-- dev = true, -- 从 ~/github/miniobsidian.nvim 加载本地源码
 		lazy = true,
 		ft = "markdown",
 		cmd = {
@@ -111,9 +111,9 @@ return {
 			{
 				"<leader>np",
 				function()
-					require("miniobsidian.image").paste_img()
+					require("miniobsidian.image").paste_file()
 				end,
-				desc = "Obsidian: 粘贴图片",
+				desc = "Obsidian: 粘贴附件",
 				ft = "markdown",
 			},
 			{
