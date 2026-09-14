@@ -32,6 +32,15 @@ return {
 				},
 				opts = { skip = true },
 			},
+			-- copilot.lua 在切换工作区时会主动 stop 旧客户端（SIGTERM → exit 143），
+			-- 这是预期行为，不展示警告。
+			{
+				filter = {
+					event = "notify",
+					find = "Client copilot quit with exit code 143",
+				},
+				opts = { skip = true },
+			},
 		},
 		presets = {
 			bottom_search = true,

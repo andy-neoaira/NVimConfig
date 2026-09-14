@@ -151,11 +151,28 @@ return {
 						},
 						{
 							function()
-								local ok, component = pcall(require, "minuet.lualine")
-								return ok and component() or ""
+								local icon = GlobalUtil.icons.kinds.Copilot
+								local status = require("copilot.status").data
+								return icon .. (status.message or "")
 							end,
 							cond = function()
-								return package.loaded["minuet"]
+								if not package.loaded["copilot"] then
+									return false
+								end
+								local ok, clients = pcall(GlobalUtil.lsp.get_clients, { name = "copilot", bufnr = 0 })
+								return ok and #clients > 0
+							end,
+							color = function()
+								if not package.loaded["copilot"] then
+									return
+								end
+								local status = require("copilot.status").data
+								return M.fg(
+									(status == nil and "DiagnosticError")
+										or (status.status == "InProgress" and "DiagnosticWarn")
+										or (status.status == "Warning" and "DiagnosticError")
+										or "Special"
+								)
 							end,
 						},
 						{

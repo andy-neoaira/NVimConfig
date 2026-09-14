@@ -13,7 +13,7 @@
 - 调试与测试：nvim-dap + ui + virtual-text、dap-python、neotest（含 python 与 vitest）
 - 文件/搜索：neo-tree 文件管理，grug-far 全局搜索替换
 - Git：gitsigns，内置 Snacks.lazygit 集成
-- AI：minuet-ai.nvim（代码补全）与 CodeCompanion.nvim（对话/解释/评审/修复）
+- AI：GitHub Copilot 与 CopilotChat（对话/解释/评审/修复）
 - 会话与实用：persistence 会话恢复，which-key 键位提示，venv-selector 虚拟环境
 - macOS 小工具：自动切换中英输入法（需 Hammerspoon，可选）
 
@@ -62,11 +62,10 @@ nvim
 推荐 LSP：lua-language-server, typescript-language-server, pyright, rust-analyzer, gopls, clangd
 推荐格式化：stylua, prettier, shfmt, black
 
-5) 可选：配置 Kimi API Key
+5) 可选：登录 Copilot
 ```
-export NVIM_AI_API_KEY="your-kimi-api-key"
+:Copilot auth
 ```
-只填写 API Key 本体，不要包含 `Bearer ` 前缀。
 
 ## ⌨️ 常用按键
 Leader 键：<Space>

@@ -28,13 +28,15 @@ M.actions = {
 			return true
 		end
 	end,
-	--- 接受 Minuet virtual text 内联建议（仅在可见时处理）
+	--- 接受 Copilot 内联建议（仅在可见且非 Markdown 时处理）
 	ai_accept = function()
-		local ok, virtualtext = pcall(require, "minuet.virtualtext")
-		local action = ok and virtualtext.action
-		if action and action.is_visible() then
+		if vim.bo.filetype == "markdown" then
+			return
+		end
+		local ok, suggestion = pcall(require, "copilot.suggestion")
+		if ok and suggestion.is_visible() then
 			GlobalUtil.create_undo()
-			action.accept()
+			suggestion.accept()
 			return true
 		end
 	end,

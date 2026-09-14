@@ -550,6 +550,14 @@ return {
 					end,
 				},
 			}
+			-- copilot LSP server 仅供 sidekick.nvim NES 功能使用。
+			-- 默认禁用 mason-lspconfig 自动启动，避免与 copilot.lua 自身管理的进程冲突。
+			local sidekick_opts = GlobalUtil.opts("sidekick.nvim") ---@type sidekick.Config|{}
+			if GlobalUtil.has("sidekick.nvim") and vim.tbl_get(sidekick_opts, "nes", "enabled") ~= false then
+				ret.servers.copilot = {}
+			else
+				ret.servers.copilot = { enabled = false }
+			end
 			return ret
 		end,
 		---@param opts PluginLspOpts
