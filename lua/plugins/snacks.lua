@@ -44,6 +44,7 @@ return {
 				enabled = true,
 				ui_select = true,
 				actions = {
+					custom_noop = function() end,
 					sidekick_send = function(...)
 						return require("sidekick.cli.snacks").send(...)
 					end,
@@ -151,9 +152,15 @@ return {
 				win = {
 					input = {
 						keys = {
+							["<c-a>"] = { "custom_noop", mode = { "n", "i" } }, -- 禁用全选
 							["<a-a>"] = { "sidekick_send", mode = { "n", "i" } },
 							["<c-b>"] = { "preview_scroll_up", mode = { "i", "n" } },
 							["<c-f>"] = { "preview_scroll_down", mode = { "i", "n" } },
+						},
+					},
+					list = {
+						keys = {
+							["<c-a>"] = "custom_noop", -- 禁用全选
 						},
 					},
 				},
