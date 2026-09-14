@@ -10,69 +10,105 @@ vim.api.nvim_create_autocmd({ "InsertLeave", "TextChanged", "FocusLost" }, {
 	command = "silent! write",
 })
 
-local previous_input_method = ""
--- 离开插入模式自动切换到英文输入法
+local english_input_method = "com.apple.keylayout.ABC"
+local previous_input_method
+local input_method_generation = 0
 local auto_switch_input_method_group = augroup("auto_switch_input_method")
--- 获取当前输入法
-local function get_current_input_method()
-	local ok, handle = pcall(function()
-		return io.popen('hs -c "getCurrentInputMethod()"')
-	end)
-	if not ok then
-		return ""
-	end
-	local result = handle:read("*a")
-	handle:close()
-	local current_input_method = ""
-	if result and "" ~= result then
-		local lines = vim.split(result, "\n", { trimempty = true })
-		current_input_method = lines[#lines]
-	end
-	return current_input_method
-end
 
--- 切换输入法
-local function switch_input_method(input_method)
-	if input_method then
-		local command = string.format("hs -c 'switchInputMethod(\"%s\")'", input_method)
-		os.execute(command)
-	end
-end
-
--- 离开插入模式缓存当前输入法并切换到英文输入法
-vim.api.nvim_create_autocmd({ "InsertLeave" }, {
-	group = auto_switch_input_method_group,
-	pattern = "*",
-	callback = function()
-		-- 缓存输入法
-		previous_input_method = get_current_input_method()
-		--已经是英文输入法不处理
-		if "" ~= previous_input_method then
-			if previous_input_method == "com.apple.keylayout.ABC" then
+---@param script string
+---@param callback? fun(result: vim.SystemCompleted)
+local function run_hammerspoon(script, callback)
+	local ok = pcall(vim.system, { "hs", "-c", script }, { text = true }, function(result)
+		vim.schedule(function()
+			if result.code ~= 0 then
+				vim.notify_once("无法通过 Hammerspoon 切换输入法", vim.log.levels.WARN)
 				return
 			end
-			switch_input_method("com.apple.keylayout.ABC")
+			if callback then
+				callback(result)
+			end
+		end)
+	end)
+	if not ok then
+		vim.notify_once("未找到 Hammerspoon CLI（hs）", vim.log.levels.WARN)
+	end
+end
+
+---@param input_method string
+local function switch_input_method(input_method)
+	local script = string.format("hs.keycodes.currentSourceID(%q)", input_method)
+	run_hammerspoon(script)
+end
+
+local function in_insert_mode()
+	return vim.api.nvim_get_mode().mode:match("^[iR]") ~= nil
+end
+
+-- 单次 IPC 同时读取并切换，避免阻塞 Neovim 主线程。
+local function remember_and_switch_to_english()
+	input_method_generation = input_method_generation + 1
+	local generation = input_method_generation
+	local script = string.format(
+		'local current = hs.keycodes.currentSourceID(); print("NVIM_INPUT_METHOD:" .. (current or "")); if current ~= %q then hs.keycodes.currentSourceID(%q) end',
+		english_input_method,
+		english_input_method
+	)
+	run_hammerspoon(script, function(result)
+		local current = (result.stdout or ""):match("NVIM_INPUT_METHOD:([^\r\n]+)")
+		if current and current ~= english_input_method then
+			previous_input_method = current
+		end
+
+		-- 若用户在 IPC 返回前已重新进入插入模式，立即恢复刚记录的输入法。
+		if generation ~= input_method_generation
+			and in_insert_mode()
+			and current
+			and current ~= english_input_method
+		then
+			switch_input_method(current)
+		end
+	end)
+end
+
+local function force_english_input_method()
+	input_method_generation = input_method_generation + 1
+	switch_input_method(english_input_method)
+end
+
+local function previous_character_is_non_ascii()
+	local _, col = unpack(vim.api.nvim_win_get_cursor(0))
+	if col == 0 then
+		return false
+	end
+	local text = vim.api.nvim_get_current_line():sub(1, col)
+	local char_count = vim.fn.strchars(text)
+	local previous_character = vim.fn.strcharpart(text, char_count - 1, 1)
+	return previous_character:byte() > 127
+end
+
+-- 离开插入模式时记住非英文输入法，并强制切换到 ABC。
+vim.api.nvim_create_autocmd("InsertLeave", {
+	group = auto_switch_input_method_group,
+	callback = remember_and_switch_to_english,
+})
+
+-- 启动、重新聚焦或进入命令行时，非插入模式始终使用英文输入法。
+vim.api.nvim_create_autocmd({ "VimEnter", "FocusGained", "CmdlineEnter" }, {
+	group = auto_switch_input_method_group,
+	callback = function()
+		if not in_insert_mode() then
+			force_english_input_method()
 		end
 	end,
 })
--- 进入插入模式回复上次输入法
-vim.api.nvim_create_autocmd({ "InsertEnter" }, {
+
+-- 中文等非 ASCII 文本后进入插入模式时，恢复上次使用的非英文输入法。
+vim.api.nvim_create_autocmd("InsertEnter", {
 	group = auto_switch_input_method_group,
-	pattern = "*",
 	callback = function()
-		-- 打印当前光标前一个字符 没有输出nil
-		local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-		if col > 0 then
-      --获取前一个字符
-			local prev_char = vim.api.nvim_buf_get_text(0, row - 1, col - 1, row - 1, col, {})[1]
-			local prev_char_byte = string.byte(prev_char)
-			-- 判断前一个字符是否是非英文字符 如果是非英文字符则切换输入法为缓存输入法
-			if prev_char_byte == nil or prev_char_byte < 0 or prev_char_byte > 127 then
-				-- 打印是否是中文字符
-				if "" ~= previous_input_method then
-					switch_input_method(previous_input_method)
-				end
-			end
+		input_method_generation = input_method_generation + 1
+		if previous_input_method and previous_character_is_non_ascii() then
+			switch_input_method(previous_input_method)
 		end
 	end,
 })
