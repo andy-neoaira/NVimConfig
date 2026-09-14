@@ -57,6 +57,62 @@ return {
 						vim.fn.setreg("+", target.file, "c")
 						vim.notify("已复制路径: " .. target.file, vim.log.levels.INFO, { title = "explorer" })
 					end,
+					-- 粘贴单个文件时，如果目标目录已有同名文件，则先让用户输入新的文件名
+					custom_explorer_paste = function(picker)
+						local register = vim.v.register or "+"
+						local files = vim.split(vim.fn.getreg(register) or "", "\n", { plain = true })
+						files = vim.tbl_filter(function(file)
+							return file ~= "" and vim.fn.filereadable(file) == 1
+						end, files)
+
+						-- 空寄存器和多文件粘贴继续交给 Snacks，保持其原有提示与批量行为
+						if #files ~= 1 then
+							picker:action("explorer_paste")
+							return
+						end
+
+						local source = files[1]
+						local dir = picker:dir()
+						local filename = vim.fn.fnamemodify(source, ":t")
+						local target = vim.fs.normalize(dir .. "/" .. filename)
+
+						if not vim.uv.fs_stat(target) then
+							picker:action("explorer_paste")
+							return
+						end
+
+						local function prompt_new_name()
+							Snacks.input({
+								prompt = "复制文件为",
+								default = filename,
+								completion = "file",
+							}, function(value)
+								value = value and vim.trim(value) or ""
+								if value == "" then
+									return
+								end
+
+								local destination = vim.fs.normalize(dir .. "/" .. value)
+								if vim.fs.dirname(destination) ~= vim.fs.normalize(dir) then
+									Snacks.notify.warn("这里只能输入当前目录中的文件名")
+									vim.schedule(prompt_new_name)
+									return
+								end
+								if vim.uv.fs_stat(destination) then
+									Snacks.notify.warn(
+										"文件已存在，请输入新的文件名：\n- `" .. destination .. "`"
+									)
+									vim.schedule(prompt_new_name)
+									return
+								end
+
+								Snacks.picker.util.copy_path(source, destination)
+								picker:action("explorer_update")
+							end)
+						end
+
+						prompt_new_name()
+					end,
 					-- 删除文件/文件夹，但禁止删除当前项目根目录
 					custom_explorer_del = function(picker, item)
 						local selected = picker:selected({ fallback = true })
@@ -191,7 +247,7 @@ return {
 									["y"] = { "explorer_yank", mode = { "n", "x" } }, -- 复制到剪贴板
 									["Y"] = "custom_copy_path",           -- 复制完整路径到系统剪贴板
 									["x"] = { "explorer_yank", mode = { "n", "x" } }, -- 剪切（配合 p 粘贴）
-									["p"] = "explorer_paste",             -- 粘贴
+									["p"] = "custom_explorer_paste", -- 粘贴；同名冲突时提示重命名
 									["c"] = "explorer_copy",              -- 复制文件
 									["m"] = "explorer_move",              -- 移动文件
 									-- ── 视图 ──────────────────────────────────────────
