@@ -14,6 +14,10 @@ return {
 					enabled = true,
 					inline = true,
 					float = true,
+					-- 内联图表覆盖源码；进入插入模式编辑对应区域时 Snacks 会暂时显示源码。
+					conceal = function(lang, image_type)
+						return lang == "mermaid" or image_type == "math"
+					end,
 					-- 增大尺寸以适配 Mermaid 图表（终端 174×46 格），原值 80/40 太小
 					max_width = 140,
 					max_height = 55,
@@ -168,6 +172,15 @@ return {
 					ui_select = {
 						win = {
 							list = { number = false, relativenumber = false },
+						},
+					},
+					recent = {
+						filter = {
+							-- v:oldfiles 可能包含通过 `nvim .` 或项目切换打开过的目录。
+							-- Snacks 只检查路径是否存在，目录等于 cwd 时会被格式化成空白项。
+							filter = function(item)
+								return item.file ~= nil and vim.fn.filereadable(item.file) == 1
+							end,
 						},
 					},
 					files = {
