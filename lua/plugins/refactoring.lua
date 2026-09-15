@@ -1,6 +1,6 @@
 return {
 	"ThePrimeagen/refactoring.nvim",
-	event = { "BufReadPre", "BufNewFile" },
+	-- 仅在执行重构快捷键时加载，避免每次打开文件初始化重构引擎。
 	dependencies = {
 		"nvim-lua/plenary.nvim",
 		"nvim-treesitter/nvim-treesitter",

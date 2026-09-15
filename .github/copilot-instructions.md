@@ -15,8 +15,8 @@
 1. 若缺失则自动引导安装 `lazy.nvim`
 2. 设置 `mapleader = " "`（空格键）
 3. 暴露 `_G.GlobalUtil = require("utils")` — 全局工具命名空间，全局可用
-4. 调用 `lazy.setup({ spec = { import = "plugins" } })` — 自动导入 `lua/plugins/` 下所有文件
-5. 依次加载 `config.options`、`config.autocmds`、`config.keymaps`
+4. 基础 `config.options` 已在引导前加载；调用 `lazy.setup({ spec = { import = "plugins" } })` 导入插件规格
+5. 加载 `config.autocmds`、`config.keymaps`（缺少基础插件时提示手动安装）
 6. 通过 `GlobalUtil.root.reload_root_path()` 解析并存储项目根目录
 
 ### 插件文件（`lua/plugins/`）
@@ -53,7 +53,7 @@
 
 `google-java-format` 会读取项目根目录下的 `.nvim/java.json`：
 ```json
-{ "google_java_format": { "aosp": false, "length": 120 } }
+{ "google_java_format": { "aosp": false } }
 ```
 
 ### 代码注释语言
@@ -76,8 +76,11 @@
 | 编辑器选项 | `lua/config/options.lua` |
 | 键映射 | `lua/config/keymaps.lua` |
 | 新增插件 | `lua/plugins/` 下新建文件 |
-| LSP 服务器 | `lua/plugins/lsp.lua` |
+| LSP 服务器 | `lua/utils/lsp_options.lua`（选项）、`lua/plugins/lsp.lua`（启动） |
 | 格式化器 | `lua/plugins/conform.lua` |
+
+工具安装统一通过 `:ToolsInstall`；解析器通过 `:TSInstallConfigured` 安装。普通启动不执行下载。
+验证入口为 `sh scripts/check.sh`；完整重构依据见 `OPTIMIZATION_REPORT.md`。
 
 ## Neovim 内常用排查命令
 

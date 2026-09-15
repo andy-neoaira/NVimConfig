@@ -56,7 +56,7 @@ option.splitbelow = true -- Put new windows below current
 option.splitkeep = "screen"
 option.splitright = true -- Put new windows right of current
 
-option.statuscolumn = [[%!v:lua.require'snacks.statuscolumn'.get()]]
+-- 状态列由 Snacks 在加载后接管；插件未安装时保留内置状态列。
 option.tabstop = 2 -- Number of spaces tabs count for
 option.termguicolors = true -- True color support
 option.timeoutlen = vim.g.vscode and 1000 or 300 -- Lower than default (1000) to quickly trigger which-key

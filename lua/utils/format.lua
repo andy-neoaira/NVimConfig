@@ -23,20 +23,24 @@ M.formatters = {}
 --- 注册格式化器
 --- 格式化器按优先级降序排序
 --- @param formatter LazyFormatter 格式化器配置
---- 
---- 优化点：
---- 1. 添加了参数验证
---- 2. 确保优先级字段存在
+---
 function M.register(formatter)
 	-- 确保必要字段存在
 	assert(formatter.name, "Formatter must have a name")
 	assert(formatter.format, "Formatter must have a format function")
 	assert(formatter.sources, "Formatter must have a sources function")
-	
+
 	formatter.priority = formatter.priority or 0
-	
+	-- 重载配置时替换同名注册项，避免一次保存执行多次格式化。
+	for i, existing in ipairs(M.formatters) do
+		if existing.name == formatter.name then
+			table.remove(M.formatters, i)
+			break
+		end
+	end
+
 	M.formatters[#M.formatters + 1] = formatter
-	
+
 	-- 按优先级降序排序
 	table.sort(M.formatters, function(a, b)
 		return a.priority > b.priority
@@ -57,14 +61,11 @@ end
 --- 确定哪些格式化器应该激活
 --- @param buf number|nil 缓冲区编号，默认为当前缓冲区
 --- @return (LazyFormatter|{active:boolean,resolved:string[]})[] 返回格式化器状态列表
---- 
---- 优化点：
---- 1. 改进了主格式化器的选择逻辑
---- 2. 添加了更清晰的注释
+---
 function M.resolve(buf)
 	buf = buf or vim.api.nvim_get_current_buf()
 	local has_primary = false
-	
+
 	return vim.tbl_map(function(formatter)
 		local sources = formatter.sources(buf)
 		-- 格式化器激活条件：
@@ -72,7 +73,7 @@ function M.resolve(buf)
 		-- 2. 不是主格式化器，或者是第一个主格式化器
 		local active = #sources > 0 and (not formatter.primary or not has_primary)
 		has_primary = has_primary or (active and formatter.primary) or false
-		
+
 		return setmetatable({
 			active = active,
 			resolved = sources,
@@ -88,19 +89,16 @@ function M.info(buf)
 	local global_enabled = vim.g.autoformat == nil or vim.g.autoformat
 	local buffer_autoformat = vim.b[buf].autoformat
 	local enabled = M.enabled(buf)
-	
+
 	local lines = {
 		"# 状态",
-		("- [%s] 全局 **%s**"):format(
-			global_enabled and "x" or " ",
-			global_enabled and "启用" or "禁用"
-		),
+		("- [%s] 全局 **%s**"):format(global_enabled and "x" or " ", global_enabled and "启用" or "禁用"),
 		("- [%s] 缓冲区 **%s**"):format(
 			enabled and "x" or " ",
 			buffer_autoformat == nil and "继承" or buffer_autoformat and "启用" or "禁用"
 		),
 	}
-	
+
 	local has_formatter = false
 	for _, formatter in ipairs(M.resolve(buf)) do
 		if #formatter.resolved > 0 then
@@ -111,11 +109,11 @@ function M.info(buf)
 			end
 		end
 	end
-	
+
 	if not has_formatter then
 		lines[#lines + 1] = "\n***该缓冲区没有可用的格式化器。***"
 	end
-	
+
 	GlobalUtil[enabled and "info" or "warn"](
 		table.concat(lines, "\n"),
 		{ title = "LazyFormat (" .. (enabled and "已启用" or "已禁用") .. ")" }
@@ -142,25 +140,34 @@ end
 --- 切换自动格式化状态
 --- @param buf boolean|nil 是否仅切换当前缓冲区
 function M.toggle(buf)
-	M.enable(not M.enabled(), buf)
+	local enabled = M.enabled()
+	if not buf then
+		enabled = vim.g.autoformat ~= false
+	end
+	M.enable(not enabled, buf)
 end
 
 --- 启用或禁用自动格式化
 --- @param enable boolean|nil 是否启用，默认为 true
 --- @param buf boolean|nil 是否仅影响当前缓冲区
---- 
+---
 --- 启用/禁用时若状态未变化则不提示，避免噪声
 function M.enable(enable, buf)
-  enable = enable == nil and true or enable
-  local prev = (buf and vim.b.autoformat) or (vim.g.autoformat == nil or vim.g.autoformat)
-  if prev == enable then return end
-  if buf then
-    vim.b.autoformat = enable
-  else
-    vim.g.autoformat = enable
-    vim.b.autoformat = nil
-  end
-  M.info()
+	enable = enable == nil and true or enable
+	-- 显式区分 nil 与 false，保留缓冲区覆盖设置。
+	local prev = vim.g.autoformat
+	if buf then
+		prev = vim.b.autoformat
+	end
+	if prev == enable then
+		return
+	end
+	if buf then
+		vim.b.autoformat = enable
+	else
+		vim.g.autoformat = enable
+	end
+	M.info()
 end
 
 --- 格式化缓冲区
@@ -168,21 +175,18 @@ end
 --- @param opts table|nil 格式化选项
 ---   - force: 是否强制格式化（忽略自动格式化设置）
 ---   - buf: 缓冲区编号
---- 
---- 优化点：
---- 1. 添加了错误处理
---- 2. 改进了执行逻辑
+---
 function M.format(opts)
 	opts = opts or {}
 	local buf = opts.buf or vim.api.nvim_get_current_buf()
-	
+
 	-- 检查是否应该格式化
 	if not ((opts and opts.force) or M.enabled(buf)) then
 		return
 	end
 
 	local formatted = false
-	
+
 	-- 执行所有激活的格式化器
 	for _, formatter in ipairs(M.resolve(buf)) do
 		if formatter.active then

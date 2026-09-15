@@ -1,5 +1,6 @@
 return {
 	"andy-neoaira/nvim-filetype",
+	cmd = "FTSelect",
 	-- dev = true,
 	opts = {
 		-- Pinned filetypes always shown first, in the order listed

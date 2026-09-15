@@ -6,8 +6,8 @@ return {
 		lazy = false, -- v1.x 不支持懒加载
 		build = ":TSUpdate",
 		config = function()
-			-- 安装解析器（异步，已安装则跳过）
-			require("nvim-treesitter").install({
+			-- 显式安装解析器，普通启动不发起下载或编译任务。
+			local parsers = {
 				"bash",
 				"c",
 				"cmake",
@@ -51,13 +51,18 @@ return {
 				"vue",
 				"xml",
 				"yaml",
-			})
+			}
+			vim.api.nvim_create_user_command("TSInstallConfigured", function()
+				require("nvim-treesitter").install(parsers)
+			end, { desc = "安装配置所需的 Treesitter 解析器" })
 
 			-- 启用 treesitter 语法高亮（Neovim 内置）
 			vim.api.nvim_create_autocmd("FileType", {
 				group = vim.api.nvim_create_augroup("custom_ts_highlight", { clear = true }),
-				callback = function()
-					pcall(vim.treesitter.start)
+				callback = function(ev)
+					if vim.bo[ev.buf].filetype ~= "bigfile" then
+						pcall(vim.treesitter.start, ev.buf)
+					end
 				end,
 			})
 
@@ -65,7 +70,12 @@ return {
 			vim.api.nvim_create_autocmd("FileType", {
 				group = vim.api.nvim_create_augroup("custom_ts_indent", { clear = true }),
 				callback = function(ev)
-					vim.bo[ev.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+					-- 仅在实际存在缩进查询时接管，保留其他文件类型的原生缩进。
+					local lang = vim.treesitter.language.get_lang(vim.bo[ev.buf].filetype)
+					local ok, query = pcall(vim.treesitter.query.get, lang or "", "indents")
+					if ok and query then
+						vim.bo[ev.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+					end
 				end,
 			})
 		end,

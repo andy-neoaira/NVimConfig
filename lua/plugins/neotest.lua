@@ -14,7 +14,10 @@ return {
 				-- 配置Pyton pytest测试框架
 				["neotest-python"] = {
 					runner = "pytest",
-					python = ".venv/bin/python",
+					-- 每次运行按项目解析解释器，避免写死当前目录的 .venv。
+					python = function(root)
+						return require("utils.python").resolve(root)
+					end,
 					-- 参数
 					args = { "--log-level", "DEBUG", "-s" },
 					-- is_test_file = function(file_path)
@@ -81,7 +84,10 @@ return {
 						if partial then
 							return
 						end
-						local tree = assert(client:get_position(nil, { adapter = adapter_id }))
+						local tree = client:get_position(nil, { adapter = adapter_id })
+						if not tree then
+							return
+						end
 
 						local failed = 0
 						for pos_id, result in pairs(results) do
@@ -91,10 +97,10 @@ return {
 						end
 						vim.schedule(function()
 							local trouble = require("trouble")
-							if trouble.is_open() then
-								trouble.refresh()
+							if trouble.is_open({ mode = "quickfix" }) then
+								trouble.refresh({ mode = "quickfix" })
 								if failed == 0 then
-									trouble.close()
+									trouble.close({ mode = "quickfix" })
 								end
 							end
 						end)

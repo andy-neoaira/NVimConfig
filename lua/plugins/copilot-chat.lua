@@ -11,7 +11,7 @@ return {
 		"zbirenbaum/copilot.lua",
 		cmd = "Copilot",
 		enabled = true,
-		build = ":Copilot auth",
+		-- 认证由用户显式执行 :Copilot auth，安装/更新插件不打开授权流程。
 		event = "BufReadPost",
 		opts = {
 			suggestion = {
@@ -260,7 +260,7 @@ return {
 						return
 					end
 
-					local timer = utils.timers.copilot_chat_complete
+					local timer = utils.timers and utils.timers.copilot_chat_complete
 					if timer then
 						pcall(timer.stop, timer)
 						pcall(timer.close, timer)

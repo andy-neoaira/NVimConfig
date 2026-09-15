@@ -152,9 +152,14 @@ return {
 		config = function()
 			-- 切换 Obsidian vault 根目录并刷新 explorer
 			local function switch_obsidian_root(vault_path)
-				GlobalUtil.root.reload_root_path(vault_path)
+				if not GlobalUtil.root.reload_root_path(vault_path) then
+					return
+				end
 				GlobalUtil.root.refresh_explorer(vault_path)
-				GlobalUtil.info("根目录已切换至: " .. vim.fn.fnamemodify(vault_path, ":~"), { title = "Obsidian Root" })
+				GlobalUtil.info(
+					"根目录已切换至: " .. vim.fn.fnamemodify(vault_path, ":~"),
+					{ title = "Obsidian Root" }
+				)
 			end
 
 			require("miniobsidian").setup({

@@ -35,7 +35,8 @@ return {
 				lint.linters[name] = vim.tbl_deep_extend("force", lint.linters[name], linter)
 				if type(linter.prepend_args) == "table" then
 					lint.linters[name].args = lint.linters[name].args or {}
-					vim.list_extend(lint.linters[name].args, linter.prepend_args)
+					lint.linters[name].args =
+						vim.list_extend(vim.deepcopy(linter.prepend_args), lint.linters[name].args)
 				end
 			else
 				lint.linters[name] = linter
@@ -44,13 +45,24 @@ return {
 		lint.linters_by_ft = opts.linters_by_ft
 
 		function M.debounce(ms, fn)
-			local timer = vim.uv.new_timer()
-			return function(...)
-				local argv = { ... }
-				timer:start(ms, 0, function()
-					timer:stop()
-					vim.schedule_wrap(fn)(unpack(argv))
-				end)
+			-- 每个缓冲区独立防抖，切换窗口不会把诊断发给新窗口中的文件。
+			local pending = {}
+			return function(event)
+				local buf, token = event.buf, {}
+				pending[buf] = token
+				vim.defer_fn(function()
+					if pending[buf] ~= token then
+						return
+					end
+					pending[buf] = nil
+					if
+						vim.api.nvim_buf_is_valid(buf)
+						and vim.api.nvim_buf_is_loaded(buf)
+						and vim.bo[buf].buftype == ""
+					then
+						vim.api.nvim_buf_call(buf, fn)
+					end
+				end, ms)
 			end
 		end
 

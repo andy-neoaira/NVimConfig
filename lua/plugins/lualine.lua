@@ -106,7 +106,12 @@ return {
 								end
 
 								local cwd = GlobalUtil.root.cwd()
-								path = path:sub(#cwd + 2)
+								-- 外部文件保留路径，不能无条件按当前目录长度截断。
+								if path:sub(1, #cwd + 1) == cwd .. "/" then
+									path = path:sub(#cwd + 2)
+								else
+									path = vim.fn.fnamemodify(path, ":~")
+								end
 
 								local sep = package.config:sub(1, 1)
 								local parts = vim.split(path, "[\\/]")

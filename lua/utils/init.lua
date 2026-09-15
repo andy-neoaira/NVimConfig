@@ -5,7 +5,7 @@ local LazyUtil = require("lazy.core.util")
 ---@field lsp utils.lsp
 ---@field root utils.root
 ---@field format utils.format
----@field mini utils.mini
+---@field buffer utils.buffer
 ---@field cmp utils.cmp
 local M = {}
 
@@ -28,7 +28,10 @@ setmetatable(M, {
 			t[k] = module
 			return module
 		end
-		-- 返回 nil 而不是抛出错误，避免访问不存在的模块时崩溃
+		-- 未知工具允许返回 nil；已有模块内部错误必须保留可诊断信息。
+		if not tostring(module):find("module 'utils." .. k .. "' not found", 1, true) then
+			vim.notify_once("工具模块加载失败: " .. k .. "\n" .. tostring(module), vim.log.levels.ERROR)
+		end
 		return nil
 	end,
 })
@@ -103,10 +106,10 @@ M.icons = {
 		Supermaven = " ",
 		TabNine = "󰏚 ",
 		Text = " ",
-    Tool = "󱁤 ",
+		Tool = "󱁤 ",
 		TypeParameter = " ",
 		Unit = " ",
-    User = " ",
+		User = " ",
 		Value = " ",
 		Variable = "󰀫 ",
 	},
@@ -147,8 +150,13 @@ end
 --- 适用于需要在插件完全加载后才能执行的初始化代码
 --- @param fn function 要执行的函数
 function M.on_very_lazy(fn)
+	if vim.g.did_very_lazy then
+		fn()
+		return
+	end
 	vim.api.nvim_create_autocmd("User", {
 		pattern = "VeryLazy",
+		once = true,
 		callback = function()
 			fn()
 		end,
@@ -163,14 +171,11 @@ end
 --- @param key string 点分隔的键路径，例如 "a.b.c"
 --- @param values T[] 要添加的值列表
 --- @return T[]|nil 返回扩展后的列表，如果路径无效则返回 nil
---- 
---- 优化点：
---- 1. 添加了类型检查，避免在非表类型上继续访问
---- 2. 使用局部变量缓存中间结果
+---
 function M.extend(t, key, values)
 	local keys = vim.split(key, ".", { plain = true })
 	local current = t
-	
+
 	for i = 1, #keys do
 		local k = keys[i]
 		-- 确保当前节点是表类型
@@ -181,12 +186,12 @@ function M.extend(t, key, values)
 		current[k] = current[k] or {}
 		current = current[k]
 	end
-	
+
 	-- 确保最终节点是表类型
 	if type(current) ~= "table" then
 		return nil
 	end
-	
+
 	return vim.list_extend(current, values)
 end
 
@@ -206,14 +211,10 @@ end
 --- 在 vim.notify 被替换或超时后才发送通知
 --- 这样可以确保通知插件（如 noice.nvim）加载完成后再显示通知
 --- 避免在启动早期显示的通知被默认的通知系统处理
---- 
---- 优化点：
---- 1. 使用更清晰的变量名
---- 2. 添加错误处理
---- 3. 改进注释说明
+---
 function M.lazy_notify()
 	local pending_notifs = {}
-	
+
 	-- 临时通知函数，收集所有通知
 	local function collect_notif(...)
 		table.insert(pending_notifs, vim.F.pack_len(...))
@@ -224,17 +225,25 @@ function M.lazy_notify()
 
 	local timer = vim.uv.new_timer()
 	local check = assert(vim.uv.new_check())
+	local replayed = false
 
 	-- 重放所有收集的通知
 	local function replay_notifications()
+		if replayed then
+			return
+		end
+		replayed = true
 		timer:stop()
 		check:stop()
-		
+		-- stop 只停止回调，close 才释放 libuv 句柄。
+		timer:close()
+		check:close()
+
 		-- 恢复原始的 notify 函数
 		if vim.notify == collect_notif then
 			vim.notify = original_notify
 		end
-		
+
 		-- 在调度器中重放通知，避免阻塞
 		vim.schedule(function()
 			for _, notif in ipairs(pending_notifs) do
@@ -249,7 +258,7 @@ function M.lazy_notify()
 			replay_notifications()
 		end
 	end)
-	
+
 	-- 超时保护：500ms 后强制重放
 	timer:start(500, 0, replay_notifications)
 end
@@ -286,22 +295,18 @@ end
 --- 安全的键盘映射设置
 --- 包装 vim.keymap.set，如果 lazy.nvim 的键处理器已经处理了该键，则不创建映射
 --- 默认设置 silent 为 true，避免命令回显
---- 
+---
 --- @param mode string|table 模式字符串或模式列表，如 'n', 'v', {'n', 'v'}
 --- @param lhs string 左侧快捷键
 --- @param rhs string|function 右侧命令或函数
 --- @param opts table|nil 选项表
---- 
---- 优化点：
---- 1. 添加了参数验证
---- 2. 改进了 modes 处理逻辑
---- 3. 优化了选项处理
+---
 function M.safe_keymap_set(mode, lhs, rhs, opts)
 	local keys = require("lazy.core.handler").handlers.keys
-	
+
 	-- 规范化模式为列表
 	local modes = type(mode) == "string" and { mode } or mode
-	
+
 	-- 过滤掉已被 lazy.nvim 处理的模式
 	modes = vim.tbl_filter(function(m)
 		return not (keys.have and keys:have(lhs, m))
@@ -312,10 +317,7 @@ function M.safe_keymap_set(mode, lhs, rhs, opts)
 		opts = opts or {}
 		-- 默认静默模式
 		opts.silent = opts.silent ~= false
-		-- 移除 remap 选项（使用 noremap）
-		if opts.remap then
-			opts.remap = nil
-		end
+		-- 保留调用方的 remap，gcc/gc 等映射需要递归到实际动作。
 		vim.keymap.set(modes, lhs, rhs, opts)
 	end
 end
@@ -325,19 +327,18 @@ end
 --- @generic T
 --- @param list T[] 输入列表
 --- @return T[] 去重后的列表
---- 
---- 优化点：使用哈希表实现 O(n) 时间复杂度
+---
 function M.dedup(list)
 	local result = {}
 	local seen = {}
-	
+
 	for _, value in ipairs(list) do
 		if not seen[value] then
 			table.insert(result, value)
 			seen[value] = true
 		end
 	end
-	
+
 	return result
 end
 
@@ -359,29 +360,23 @@ end
 --- @param path string|nil 可选的子路径
 --- @param opts table|nil 选项表 { warn?: boolean }
 --- @return string 返回完整的包路径
---- 
---- 优化点：
---- 1. 改进了路径拼接逻辑
---- 2. 添加了更好的错误处理
---- 3. 使用 vim.uv.fs_stat 替代 vim.loop.fs_stat（更现代的 API）
+---
 function M.get_pkg_path(pkg, path, opts)
 	-- 确保 Mason 已加载（生成文档时可能失败）
 	pcall(require, "mason")
-	
+
 	local root = vim.env.MASON or (vim.fn.stdpath("data") .. "/mason")
 	opts = opts or {}
 	opts.warn = opts.warn == nil and true or opts.warn
 	path = path or ""
-	
+
 	local full_path = root .. "/packages/" .. pkg .. "/" .. path
-	
+
 	-- 检查路径是否存在，如果不存在且需要警告，则发出警告
 	if opts.warn and not vim.uv.fs_stat(full_path) and not require("lazy.core.config").headless() then
-		M.warn(
-			("Mason 包路径未找到: **%s**:\n- `%s`\n您可能需要强制更新该包。"):format(pkg, path)
-		)
+		M.warn(("Mason 包路径未找到: **%s**:\n- `%s`\n您可能需要强制更新该包。"):format(pkg, path))
 	end
-	
+
 	return full_path
 end
 
@@ -405,10 +400,7 @@ local memoize_cache = {}
 --- @generic T: function
 --- @param fn T 要记忆化的函数
 --- @return T 返回记忆化后的函数
---- 
---- 优化点：
---- 1. 使用独立的缓存变量，避免污染全局作用域
---- 2. 添加了更清晰的注释
+---
 function M.memoize(fn)
 	return function(...)
 		local key = vim.inspect({ ... })

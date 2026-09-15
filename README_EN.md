@@ -1,91 +1,74 @@
-# NVimConfig | Neovim configuration
+# NVimConfig
 
-A modern, batteries-included Neovim setup featuring LSP, DAP, testing, formatting, Git, and AI assistants. Built on lazy.nvim with great performance and modularity.
+Personal Neovim configuration using lazy.nvim and Snacks for navigation and search.
 
-- Audience: multi-language developers
-- Requirements: Neovim >= 0.9, a Nerd Font, and a basic C toolchain
+See [中文说明](README.md) and the [full review report](OPTIMIZATION_REPORT.md).
 
-## ✨ Features
-- Performance & UI: lazy-loaded plugins, tokyonight theme, lualine, bufferline, noice UI, Snacks statuscolumn/terminal/tools
-- Language & Completion: mason(+lspconfig), nvim-lspconfig, blink.cmp, friendly-snippets
-- Syntax & Editing: nvim-treesitter, ts-autotag, ts-comments, todo-comments
-- Code Quality: conform.nvim (formatting), nvim-lint (linting)
-- Debug & Test: nvim-dap + ui + virtual-text, dap-python, neotest (python/vitest)
-- Files & Search: neo-tree file explorer, grug-far search & replace
-- Git: gitsigns, integrated Snacks.lazygit
-- AI: GitHub Copilot and CopilotChat
-- Sessions & Utils: persistence, which-key, venv-selector
-- macOS utility: optional auto IME switching via Hammerspoon
+## Requirements
 
-## 📦 Requirements
-- Neovim >= 0.9.0, Git, a Nerd Font, C toolchain
-- Optional: Node.js, Python, Lazygit, ripgrep, fd, Hammerspoon (macOS)
+Neovim **0.12+**, Git, a Nerd Font, and build tools for Treesitter parsers. Install ripgrep and fd for search. Language servers, formatters, test runners, and debug adapters are separate tools.
 
-macOS example:
+Image and Mermaid previews require a compatible terminal and conversion tools. Run `:checkhealth snacks`. Hammerspoon input switching is optional on macOS and is skipped in headless sessions.
+
+## Setup
+
+Back up your existing configuration and data before installing this repository.
+
+1. Start Neovim. Only lazy.nvim bootstraps automatically.
+2. Run `:Lazy install` and restart.
+3. Run `:ToolsInstall` for configured external tools.
+4. Run `:TSInstallConfigured` for parsers.
+5. Run `:Copilot auth` if using Copilot completion.
+
+Use `:Lazy update` to update plugins or `:Lazy restore` to restore locked versions. Normal startup does not refresh the Mason registry or download parsers.
+
+CopilotChat retains the custom Moonshot provider and reads `NVIM_AI_API_KEY` from the environment. It does not use Copilot authentication.
+
+## Behavior and customization
+
+Autosave handles modified, named, writable file buffers. Normal-mode edits are debounced by 200ms. Conform formats synchronously on save and falls back to LSP when no external formatter is available.
+
+Set flags before `require("config")` in `init.lua`:
+
+```lua
+vim.g.autosave = false
+vim.g.autoformat = false
+vim.g.input_method = false
+vim.g.java_lsp = true -- optional; disabled by default
+vim.g.blink_diag = true -- optional event logging
+```
+
+Use `vim.b.autosave = false` to disable autosave for one buffer; global autosave disable remains a master switch. Explicit `vim.b.autoformat` values override the global format setting; set to `nil` to inherit.
+
+Java requires nvim-jdtls, jdtls, and JDK 21+. Project settings live in `.nvim/java.json`. Google Java Format supports its standard/AOSP styles. The old configuration misused `length` as line width: `--length` actually specifies a character range and must be paired with `--offset`.
+
+## Keymaps
+
+Leader is Space. Use `<leader>sk` or which-key to inspect all mappings.
+
+| Key | Action |
+| --- | --- |
+| `<leader>e` / `<C-e>` | Snacks explorer |
+| `<leader>ff` / `<leader>sg` | Find files / grep project |
+| `<leader>sr` | Search and replace |
+| `<leader>cf` | Format manually |
+| `<leader>of` / `<leader>oF` | Global / buffer autoformat |
+| `<leader>cr` | LSP rename |
+| `<leader>om` | Toggle Markdown and inline image preview |
+| `<leader>tt` / `<leader>tf` | Run nearest / file tests |
+| `<leader>P` | Set project root from the current buffer |
+| `<C-a>` | CopilotChat |
+
+Explorer `x` and `m` move files; `y` copies paths and `p` pastes.
+
+## Checks
+
+With plugins, JSON/JSON5 parsers, and StyLua installed:
+
 ```sh
-brew install neovim git make ripgrep fd lazygit node python
-brew tap homebrew/cask-fonts && brew install --cask font-jetbrains-mono-nerd-font
+sh scripts/check.sh
 ```
 
-## 🚀 Getting Started
-1) Backup or remove your old config
-```sh
-mv ~/.config/nvim{,.bak}; mv ~/.local/share/nvim{,.bak}; mv ~/.local/state/nvim{,.bak}; mv ~/.cache/nvim{,.bak}
-# or
-rm -rf ~/.config/nvim ~/.cache/nvim ~/.local/share/nvim ~/.local/state/nvim
-```
-2) Clone
-```sh
-git clone https://github.com/andy-neoaira/NVimConfig.git ~/.config/nvim
-```
-3) Start Neovim and wait for auto-install
-```sh
-nvim
-```
-4) (Optional) Install tools via Mason
-```
-:Mason
-```
-Suggested LSP: lua-language-server, typescript-language-server, pyright, rust-analyzer, gopls, clangd
-Suggested formatters: stylua, prettier, shfmt, black
+Checks use temporary state/cache/log directories and do not send AI requests. They cover core behavior, async ordering, plugin setup, real format-on-save, and custom query parsing. Terminal graphics and real language/debug/test sessions require separate environment-specific validation.
 
-5) (Optional) Copilot login
-```
-:Copilot auth
-```
-
-## ⌨️ Keymaps (Leader = Space)
-- Files: <leader>e or <C-e> → toggle neo-tree
-- Windows: <leader>h/j/k/l move; <C-arrows> resize; <leader>- / <leader>| split; <leader>wd close
-- Buffers: <S-h>/<S-l> prev/next; <leader>bd delete; <leader>bo delete others
-- Search & Replace: <leader>fr grug-far
-- Terminal: <C-/> floating terminal (Snacks.terminal); in terminal, <C-/> closes
-- Diagnostics: <leader>cd line diag; ]d/[d next/prev; ]e/[e error; ]w/[w warn
-- Git (lazygit): <leader>gg root; <leader>gG cwd; <leader>gb blame; <leader>gB browse; <leader>gh file history; <leader>gl/gL log
-- Misc: <leader>L Lazy; <leader>fn new file; <leader>ft change filetype; <leader>cf format
-- Common LSP: gd/gr/gi, K, <leader>ca, <leader>rn
-
-## 🧱 Layout
-```
-~/.config/nvim/
-├── init.lua
-├── lazy-lock.json
-└── lua/{config,plugins,utils,types.lua}
-```
-
-## 🛠 Customize
-- Theme: edit lua/plugins/colorscheme.lua (default: tokyonight)
-- Options: edit lua/config/options.lua
-- Keymaps: edit lua/config/keymaps.lua
-- Plugins: add a file under lua/plugins/ that returns your plugin spec
-
-## 🐞 Troubleshooting
-- Plugins not installing: :Lazy sync (check network/proxy)
-- LSP issues: :Mason to install, :LspInfo to check, :LspRestart to restart
-- Performance: :Lazy profile
-
-## 📄 License
-MIT
-
-## 🙏 Acknowledgments
-Neovim community; inspirations from LazyVim, NvChad, AstroNvim.
+MIT License.

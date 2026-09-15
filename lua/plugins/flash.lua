@@ -17,10 +17,10 @@ return {
 					enabled = true,
 				},
 			},
-	},
+		},
 		keys = function()
 			return {
-			{
+				{
 					"f",
 					mode = { "n", "x", "o" },
 					function()

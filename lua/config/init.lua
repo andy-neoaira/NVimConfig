@@ -1,3 +1,14 @@
+-- 当前 Treesitter 与 LSP 配置以 Neovim 0.12 为最低版本。
+if vim.fn.has("nvim-0.12") == 0 then
+	vim.api.nvim_echo({ { "此配置需要 Neovim 0.12 或更高版本", "ErrorMsg" } }, true, {})
+	return {}
+end
+
+-- leader 与基础选项必须先于插件初始化，否则插件会缓存错误的默认值。
+vim.g.mapleader = " "
+vim.g.maplocalleader = " "
+require("config.options")
+
 -- 下载插件管理器
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -7,21 +18,16 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 		vim.api.nvim_echo({
 			{ "Failed to clone lazy.nvim:\n", "ErrorMsg" },
 			{ out, "WarningMsg" },
-			{ "\nPress any key to exit..." },
 		}, true, {})
-		vim.fn.getchar()
-		os.exit(1)
+		return {}
 	end
 end
 --添加rtp
 vim.opt.rtp:prepend(lazypath)
 
---设置leader
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
-
 --全局工具
 _G.GlobalUtil = require("utils")
+GlobalUtil.lazy_notify()
 --启动插件
 require("lazy").setup({
 	spec = {
@@ -43,12 +49,10 @@ require("lazy").setup({
 	git = {
 		-- 增加超时时间到 2 分钟，防止下载大插件（如 Copilot）时因为短暂波动被断开
 		timeout = 120,
-		-- 强制开启浅克隆，极大地减少下载体积
-		depth = 1,
-		-- 尝试使用 https 协议，通常比 ssh 在代理环境下更稳定
+		-- 使用 partial clone 减少对象下载；lazy.nvim 不支持 depth 选项。
 		filter = true,
 	},
-	concurrency = 15, -- [关键] 限制同时下载的数量，2 个最稳，不会挤死带宽
+	concurrency = 4, -- 限制安装/更新任务并发，减少网络与磁盘竞争。
 	ui = {
 		-- 界面优化
 		border = "rounded",
@@ -70,14 +74,15 @@ require("lazy").setup({
 		},
 	},
 })
---延迟通知
-GlobalUtil.lazy_notify()
---加载通用设置
-require("config.options")
 --加载自动命令
 require("config.autocmds")
 --加载键盘映射
-require("config.keymaps")
+-- 首次部署仍可打开 Lazy 安装界面，避免缺少 Snacks 时键位初始化报错。
+if _G.Snacks then
+	require("config.keymaps")
+else
+	GlobalUtil.warn("基础插件尚未安装，请执行 :Lazy install，完成后重启 Neovim")
+end
 --获取打开的参数
 local path = vim.fn.getcwd()
 -- 遍历参数列表

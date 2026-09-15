@@ -35,15 +35,22 @@ M.root_path = nil
 --- 重新加载根目录路径
 --- @param path string|nil 指定的路径，如果为 nil 则使用当前工作目录
 ---
---- 优化点：添加了路径验证
 function M.reload_root_path(path)
-	if path and vim.uv.fs_stat(path) then
-		M.root_path = M.realpath(path)
-	else
-		M.root_path = M.realpath(vim.uv.cwd())
+	path = M.realpath(path or vim.fn.getcwd())
+	local stat = path and vim.uv.fs_stat(path)
+	if not stat or stat.type ~= "directory" then
+		GlobalUtil.warn("项目目录不存在: " .. tostring(path), { title = "Root" })
+		return false
 	end
-	-- nvim_set_current_dir 触发 DirChanged，保持 Neovim 内部 cwd 与 root_path 一致
-	pcall(vim.api.nvim_set_current_dir, M.root_path)
+	local ok, err = pcall(vim.api.nvim_set_current_dir, path)
+	if not ok then
+		GlobalUtil.warn(tostring(err), { title = "Root" })
+		return false
+	end
+	-- 切换成功后再更新状态，也覆盖尚未注册 DirChanged 的启动阶段。
+	M.root_path = path
+	M.cache = {}
+	return true
 end
 
 --- 当前工作目录检测器
@@ -57,9 +64,6 @@ end
 --- @param buf number 缓冲区编号
 --- @return string[] 返回检测到的根目录列表
 ---
---- 优化点：
---- 1. 添加了空值检查
---- 2. 简化了过滤逻辑
 function M.detectors.lsp(buf)
 	local bufpath = M.bufpath(buf)
 	if not bufpath then
@@ -77,7 +81,7 @@ function M.detectors.lsp(buf)
 	-- 收集所有客户端的根目录
 	for _, client in pairs(clients) do
 		-- 从 workspace_folders 获取
-		local workspace = client.config.workspace_folders
+		local workspace = client.workspace_folders or client.config.workspace_folders
 		if workspace then
 			for _, ws in pairs(workspace) do
 				roots[#roots + 1] = vim.uri_to_fname(ws.uri)
@@ -92,8 +96,10 @@ function M.detectors.lsp(buf)
 
 	-- 过滤出包含当前文件的根目录
 	return vim.tbl_filter(function(path)
-		path = GlobalUtil.norm(path)
-		return path and bufpath:find(path, 1, true) == 1
+		path = M.realpath(path)
+		-- 匹配目录边界，/work/app 不能包含 /work/apple 下的文件。
+		local prefix = path and (path:sub(-1) == "/" and path or path .. "/")
+		return path and (bufpath == path or bufpath:sub(1, #prefix) == prefix)
 	end, roots)
 end
 
@@ -103,12 +109,13 @@ end
 --- @param patterns string|string[] 要查找的文件名或模式列表
 --- @return string[] 返回找到的根目录列表
 ---
---- 优化点：
---- 1. 改进了模式匹配逻辑
---- 2. 添加了通配符支持的说明
 function M.detectors.pattern(buf, patterns)
 	patterns = type(patterns) == "string" and { patterns } or patterns
 	local path = M.bufpath(buf) or vim.uv.cwd()
+	local stat = vim.uv.fs_stat(path)
+	if not stat or stat.type ~= "directory" then
+		path = vim.fs.dirname(path)
+	end
 
 	-- 向上查找匹配的文件或目录
 	local pattern = vim.fs.find(function(name)
@@ -134,7 +141,7 @@ end
 --- @return string|nil 规范化后的路径，若为空缓冲区则返回 nil
 function M.bufpath(buf)
 	local b = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
-	if not b or b <= 0 then
+	if not b or b <= 0 or not vim.api.nvim_buf_is_valid(b) then
 		return nil
 	end
 	local name = vim.api.nvim_buf_get_name(b)
@@ -147,7 +154,7 @@ end
 --- 获取缓存的根目录
 --- @return string|nil 返回根目录路径
 function M.root()
-	return M.root_path
+	return M.root_path or M.cwd()
 end
 
 --- 获取当前工作目录
@@ -168,14 +175,14 @@ end
 --- @param path string|nil 输入路径
 --- @return string|nil 返回真实路径，如果路径无效则返回 nil
 ---
---- 优化点：添加了空字符串的检查
 function M.realpath(path)
 	if path == "" or path == nil then
 		return nil
 	end
 
-	path = vim.uv.fs_realpath(path) or path
-	return GlobalUtil.norm(path)
+	-- 内置 normalize 保留 / 根目录；旧工具会移除它唯一的斜杠。
+	path = vim.fs.normalize(path)
+	return vim.fs.normalize(vim.uv.fs_realpath(path) or path)
 end
 
 --- 解析根目录检测规范
@@ -207,9 +214,6 @@ end
 ---   - all: 是否返回所有匹配的根目录，默认 false 只返回第一个
 --- @return LazyRoot[] 返回检测到的根目录列表
 ---
---- 优化点：
---- 1. 改进了选项处理
---- 2. 添加了更清晰的注释
 function M.detect(opts)
 	opts = opts or {}
 	opts.spec = opts.spec or type(vim.g.root_spec) == "table" and vim.g.root_spec or M.spec
@@ -240,7 +244,7 @@ function M.detect(opts)
 		if #roots > 0 then
 			results[#results + 1] = { spec = spec, paths = roots }
 			-- 如果不需要所有结果，找到第一个就返回
-			if opts.all == false then
+			if not opts.all then
 				break
 			end
 		end
@@ -294,12 +298,9 @@ M.cache = {}
 ---   - buf: 缓冲区编号
 --- @return string 返回检测到的根目录路径
 ---
---- 优化点：
---- 1. 添加了缓存机制
---- 2. 改进了选项处理
 function M.get(opts)
 	opts = opts or {}
-	local buf = opts.buf or vim.api.nvim_get_current_buf()
+	local buf = (opts.buf == nil or opts.buf == 0) and vim.api.nvim_get_current_buf() or opts.buf
 	local cached = M.cache[buf]
 
 	if not cached then
@@ -327,7 +328,6 @@ function M.refresh_explorer(path)
 	if not (Snacks and Snacks.picker) then
 		return
 	end
-	local prev_win = vim.api.nvim_get_current_win()
 	vim.schedule(function()
 		local ok, explorers = pcall(function()
 			return Snacks.picker.get({ source = "explorer" })
@@ -341,13 +341,7 @@ function M.refresh_explorer(path)
 				pcall(explorer.find, explorer, { refresh = true })
 			end
 		end
-		-- 延迟 50ms 再恢复焦点：给 iCloud 等慢速文件系统的 explorer 内部异步操作留出充裕时间，
-		-- 避免 set_cwd/find 触发的回调尚未结束就抢先恢复焦点
-		vim.defer_fn(function()
-			if vim.api.nvim_win_is_valid(prev_win) then
-				vim.api.nvim_set_current_win(prev_win)
-			end
-		end, 50)
+		-- 不用定时器恢复旧窗口，避免覆盖用户在刷新期间主动切换的焦点。
 	end)
 end
 
@@ -363,7 +357,9 @@ function M.set_current_buffer_root()
 	end
 
 	-- nvim_set_current_dir 会触发 DirChanged，由 autocmd 统一更新 root_path 和 cache
-	pcall(vim.api.nvim_set_current_dir, buf_root)
+	if not M.reload_root_path(buf_root) then
+		return
+	end
 	M.refresh_explorer(buf_root)
 
 	GlobalUtil.info("项目根目录已更新: " .. vim.fn.fnamemodify(buf_root, ":~"), { title = "Root" })

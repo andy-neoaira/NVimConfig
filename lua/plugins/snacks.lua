@@ -40,8 +40,8 @@ return {
 			},
 			explorer = {
 				enabled = true,
-				replace_netrw = true, -- 禁用自动打开（手动用 <C-e> / <leader>e 打开）
-        trash = true, -- Use the system trash when deleting files
+				replace_netrw = true, -- 打开目录时由 Snacks 接管 netrw。
+				trash = true, -- Use the system trash when deleting files
 			},
 			picker = {
 				prompt = GlobalUtil.icons.kinds.Apple,
@@ -49,9 +49,6 @@ return {
 				ui_select = true,
 				actions = {
 					custom_noop = function() end,
-					sidekick_send = function(...)
-						return require("sidekick.cli.snacks").send(...)
-					end,
 					-- 复制文件完整路径到系统剪贴板
 					custom_copy_path = function(picker)
 						local selected = picker:selected({ fallback = true })
@@ -157,7 +154,6 @@ return {
 					input = {
 						keys = {
 							["<c-a>"] = { "custom_noop", mode = { "n", "i" } }, -- 禁用全选
-							["<a-a>"] = { "sidekick_send", mode = { "n", "i" } },
 							["<c-b>"] = { "preview_scroll_up", mode = { "i", "n" } },
 							["<c-f>"] = { "preview_scroll_down", mode = { "i", "n" } },
 						},
@@ -188,6 +184,9 @@ return {
 						hidden = true, -- 默认显示 gitignore 文件
 						-- 黑名单：过滤常见二进制/编译产物/字体/媒体/压缩包等
 						exclude = {
+							".git",
+							"node_modules",
+							".venv",
 							"*.class",
 							"*.jar",
 							"*.war",
@@ -247,45 +246,45 @@ return {
 									-- ESC 在 list 窗口中禁用（防止关闭 explorer）
 									["<Esc>"] = false,
 									-- ── 导航 ──────────────────────────────────────────
-									["<BS>"] = "custom_explorer_up",      -- 退回上级目录（同步根目录）
-									["<CR>"] = "explorer_focus",          -- 进入目录并设为 cwd（方案 B）
-									["<2-LeftMouse>"] = "confirm",        -- 双击打开文件
-									["o"] = "confirm",                    -- 打开文件
-									["l"] = "confirm",                    -- 打开文件（同 o）
-									["h"] = "explorer_close",             -- 折叠目录
-									["s"] = "edit_split",                 -- 水平分割打开
-									["v"] = "edit_vsplit",                -- 垂直分割打开
-									["O"] = "explorer_open",              -- 用系统应用打开
+									["<BS>"] = "custom_explorer_up", -- 退回上级目录（同步根目录）
+									["<CR>"] = "explorer_focus", -- 进入目录并设为 cwd（方案 B）
+									["<2-LeftMouse>"] = "confirm", -- 双击打开文件
+									["o"] = "confirm", -- 打开文件
+									["l"] = "confirm", -- 打开文件（同 o）
+									["h"] = "explorer_close", -- 折叠目录
+									["s"] = "edit_split", -- 水平分割打开
+									["v"] = "edit_vsplit", -- 垂直分割打开
+									["O"] = "explorer_open", -- 用系统应用打开
 									-- ── 搜索 / 过滤 ───────────────────────────────────
-									["/"] = "focus_input",                -- 聚焦顶部搜索框进行实时过滤（同 vim / 搜索习惯）
+									["/"] = "focus_input", -- 聚焦顶部搜索框进行实时过滤（同 vim / 搜索习惯）
 									-- ── 文件操作 ──────────────────────────────────────
 									-- 新建：输入名称后按 <CR>；以 / 结尾自动创建目录
-									["a"] = "explorer_add",               -- 新建文件（名称末尾加 / 则建目录）
-									["A"] = "explorer_add",               -- 同上（保留 neo-tree 肌肉记忆）
-									["d"] = "custom_explorer_del",        -- 移入回收站（禁止删除项目根目录）
-									["r"] = "explorer_rename",            -- 重命名
+									["a"] = "explorer_add", -- 新建文件（名称末尾加 / 则建目录）
+									["A"] = "explorer_add", -- 同上（保留 neo-tree 肌肉记忆）
+									["d"] = "custom_explorer_del", -- 移入回收站（禁止删除项目根目录）
+									["r"] = "explorer_rename", -- 重命名
 									["y"] = { "explorer_yank", mode = { "n", "x" } }, -- 复制到剪贴板
-									["Y"] = "custom_copy_path",           -- 复制完整路径到系统剪贴板
-									["x"] = { "explorer_yank", mode = { "n", "x" } }, -- 剪切（配合 p 粘贴）
+									["Y"] = "custom_copy_path", -- 复制完整路径到系统剪贴板
+									["x"] = "explorer_move", -- 移动文件；原 explorer_yank 实际只复制路径。
 									["p"] = "custom_explorer_paste", -- 粘贴；同名冲突时提示重命名
-									["c"] = "explorer_copy",              -- 复制文件
-									["m"] = "explorer_move",              -- 移动文件
+									["c"] = "explorer_copy", -- 复制文件
+									["m"] = "explorer_move", -- 移动文件
 									-- ── 视图 ──────────────────────────────────────────
-									["z"] = "explorer_close_all",         -- 折叠所有目录
+									["z"] = "explorer_close_all", -- 折叠所有目录
 									["Z"] = "explorer_close_all",
-									["R"] = "explorer_update",            -- 刷新
+									["R"] = "explorer_update", -- 刷新
 									["u"] = "explorer_update",
-									["<tab>"] = "toggle_preview",         -- 切换预览
+									["<tab>"] = "toggle_preview", -- 切换预览
 									["P"] = "toggle_preview",
 									["<C-f>"] = { "preview_scroll_down", mode = { "n", "x" } },
 									["<C-b>"] = { "preview_scroll_up", mode = { "n", "x" } },
-									["I"] = "toggle_ignored",             -- 切换显示 gitignore 文件
-									["."] = "toggle_hidden",              -- 切换显示隐藏文件
+									["I"] = "toggle_ignored", -- 切换显示 gitignore 文件
+									["."] = "toggle_hidden", -- 切换显示隐藏文件
 									-- ── 其他 ──────────────────────────────────────────
-									["<c-o>"] = "explorer_open",          -- 系统应用打开（备用）
-									["<c-c>"] = "tcd",                    -- 设置 tab 工作目录
-									["<leader>/"] = "picker_grep",        -- 在当前目录 grep
-									["<c-t>"] = "terminal",               -- 在当前目录打开终端
+									["<c-o>"] = "explorer_open", -- 系统应用打开（备用）
+									["<c-c>"] = "tcd", -- 设置 tab 工作目录
+									["<leader>/"] = "picker_grep", -- 在当前目录 grep
+									["<c-t>"] = "terminal", -- 在当前目录打开终端
 									-- ── Git / 诊断跳转 ────────────────────────────────
 									["]g"] = "explorer_git_next",
 									["[g"] = "explorer_git_prev",
@@ -295,7 +294,7 @@ return {
 									["[w"] = "explorer_warn_prev",
 									["]e"] = "explorer_error_next",
 									["[e"] = "explorer_error_prev",
-									["?"] = "toggle_help_list",           -- 显示快捷键帮助
+									["?"] = "toggle_help_list", -- 显示快捷键帮助
 								},
 							},
 						},
@@ -307,7 +306,8 @@ return {
 			},
 			quickfile = { enabled = true },
 			statuscolumn = { enabled = true },
-			words = { enabled = true },
+			-- 与 LSP 中关闭 documentHighlight 的策略一致，避免额外光标请求。
+			words = { enabled = false },
 			terminal = {
 				win = { position = "float", border = "rounded" },
 			},
@@ -345,27 +345,7 @@ return {
 		config = function(_, opts)
 			require("snacks").setup(opts)
 
-			-- 修复 snacks 图片 buffer：切走再切回时 hidden 状态没有恢复，导致图片不重绘。
-			local placement = require("snacks.image.placement")
-			if placement._patched_reenter_fix then
-				return
-			end
-			placement._patched_reenter_fix = true
-
-			local update = placement.update
-			function placement:update()
-				if not self.opts.inline and self.hidden and #self:wins() > 0 then
-					self.hidden = false
-				end
-				local ok, err = pcall(update, self)
-				if not ok then
-					-- 静默忽略无效图片文件（如损坏的 PNG 或伪装成图片的文本文件）
-					if type(err) == "string" and err:find("Not a valid PNG") then
-						return
-					end
-					error(err, 2)
-				end
-			end
+			require("utils.image").setup()
 		end,
 		keys = {
 			-- Top Pickers & Explorer

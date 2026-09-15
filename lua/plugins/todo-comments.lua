@@ -94,7 +94,7 @@ return {
 			{
 				"<leader>st",
 				function()
-          ---@diagnostic disable-next-line: undefined-field
+					---@diagnostic disable-next-line: undefined-field
 					Snacks.picker.todo_comments()
 				end,
 				desc = "Todo",

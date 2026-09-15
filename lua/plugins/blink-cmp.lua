@@ -31,7 +31,7 @@ return {
 
 	-- ── opts：返回 blink.cmp 完整配置 table ─────────────────
 	-- 使用 function 形式而非 table，是因为需要在运行时访问 GlobalUtil
-	-- （GlobalUtil 在 config/init.lua 的 VeryLazy 阶段才注册到 _G）
+	-- GlobalUtil 在 lazy.setup 之前注册，opts 延迟求值以便读取合并后的插件配置。
 	opts = function()
 		-- 判断光标前是否存在非空白字符。
 		-- 用于 <Tab> 键位：只有光标前有内容时才主动弹出补全菜单，
@@ -309,7 +309,7 @@ return {
 				-- 默认激活的 source 列表（按优先级排列，score_offset 会进一步调整）：
 				-- lsp → path → snippets → buffer → copilot
 				-- 其他插件（如 miniobsidian）通过各自的 lazy spec 追加到此列表
-				default = { "lsp", "path", "snippets", "buffer", "copilot" },
+				default = { "lazydev", "lsp", "path", "snippets", "buffer", "copilot" },
 
 				providers = {
 					-- LSP source：调用当前 buffer 关联的 LSP 服务器获取补全
@@ -393,65 +393,9 @@ return {
 		-- default = true 表示如果主题已定义 BlinkCmpGhostText 则不覆盖
 		vim.api.nvim_set_hl(0, "BlinkCmpGhostText", { link = "Comment", default = true })
 
-		-- ── 性能诊断模式（按需启用）──────────────────────────
-		-- 启用方式：在 init.lua 或命令行中设置 vim.g.blink_diag = true，
-		-- 然后重启 Neovim；日志写入 /tmp/blink_diag.log
-		-- 用途：定位"补全菜单出现慢"问题，区分是 LSP 慢还是 blink 渲染慢
+		-- 按需开启事件日志，路径为 stdpath("log")/blink_diag.log。
 		if vim.g.blink_diag == true then
-			local logfile = "/tmp/blink_diag.log"
-			-- 封装写日志函数，pcall 保护避免写文件失败导致整体报错
-			local function log(msg)
-				pcall(vim.fn.writefile, { os.date("%H:%M:%S ") .. msg }, logfile, "a")
-			end
-
-			-- Monkey-patch vim.lsp.buf_request：记录每次 LSP 请求的耗时
-			-- 原理：包装 handler 回调，在回调触发时计算从发起请求到收到响应的毫秒数
-			-- 注意：此 patch 是全局的，会影响所有 LSP 请求（不只是补全）
-			local orig_req = vim.lsp.buf_request
-			vim.lsp.buf_request = function(buf, method, params, handler)
-				local t0 = vim.uv.hrtime() -- 高精度时间戳（纳秒）
-				local wrapped = function(err, result, ctx, cfg)
-					local ms = (vim.uv.hrtime() - t0) / 1e6 -- 转换为毫秒
-					log(string.format("LSP %s %.1fms (client=%s)", method, ms, ctx and ctx.client_id or "-"))
-					-- 优先使用调用方传入的 handler，否则使用全局默认 handler
-					if handler then
-						return handler(err, result, ctx, cfg)
-					end
-					local h = vim.lsp.handlers[method]
-					return h and h(err, result, ctx, cfg)
-				end
-				return orig_req(buf, method, params, wrapped)
-			end
-
-			-- Monkey-patch blink.show：记录从调用 show() 到菜单真正可见的耗时
-			-- 原理：轮询 blink.is_visible()，记录首次可见时的耗时
-			-- tries > 50（即 50 × 5ms = 250ms）作为超时保护，避免无限轮询
-			local orig_show = blink.show
-			blink.show = function(...)
-				local t0 = vim.uv.hrtime()
-				local ret = orig_show(...)
-				local tries = 0
-				local function poll()
-					tries = tries + 1
-					if blink.is_visible() or tries > 50 then
-						local ms = (vim.uv.hrtime() - t0) / 1e6
-						log(string.format("MENU visible %.1fms (tries=%d)", ms, tries))
-					else
-						vim.defer_fn(poll, 5) -- 每 5ms 检查一次
-					end
-				end
-				vim.defer_fn(poll, 0) -- 下一个事件循环开始轮询
-				return ret
-			end
-
-			-- 记录输入事件：追踪触发补全的具体字符和文件类型，
-			-- 用于排查"某类文件不触发补全"的问题
-			vim.api.nvim_create_autocmd({ "TextChangedI", "InsertCharPre" }, {
-				callback = function(ev)
-					log("EV " .. ev.event .. " col=" .. vim.fn.col(".") .. " ft=" .. vim.bo.filetype)
-				end,
-			})
-			log("--- blink diag start ---")
+			require("utils.blink_debug").setup()
 		end
 	end,
 }

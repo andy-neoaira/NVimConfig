@@ -4,7 +4,7 @@ return {
 	init = function()
 		if vim.fn.exists(":Markview") == 0 then
 			vim.api.nvim_create_user_command("Markview", function()
-				require("render-markdown").toggle()
+				require("utils.image").toggle_markdown()
 			end, { desc = "兼容旧的 Markview 切换命令" })
 		end
 	end,

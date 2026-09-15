@@ -120,38 +120,16 @@ end, { desc = "Format" })
 
 -- 切换 markdown 渲染 + Mermaid 图表（render-markdown.nvim + snacks image 联动）
 map("n", "<leader>om", function()
-	local rm = require("render-markdown")
-	local was_enabled = rm.get()
-	rm.toggle()
-	local buf = vim.api.nvim_get_current_buf()
-	local ns = vim.api.nvim_create_namespace("snacks.image")
-	if was_enabled then
-		-- 「开启 → 关闭」：清除所有 snacks 内联图片，恢复纯源码视图
-		vim.schedule(function()
-			vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-			vim.b[buf].snacks_image_attached = false
-		end)
-	else
-		-- 「关闭 → 开启」：重新触发 snacks 图片渲染，显示 Mermaid 图表
-		vim.schedule(function()
-			vim.b[buf].snacks_image_attached = nil
-			local ok, doc = pcall(require, "snacks.image.doc")
-			if ok then
-				doc.attach(buf)
-			end
-		end)
-	end
+	require("utils.image").toggle_markdown()
 end, { desc = "切换 markdown 预览（含 Mermaid）" })
 
 -- diagnostic
 local diagnostic_goto = function(next, severity)
-	local go = next and vim.diagnostic.goto_next or vim.diagnostic.goto_prev
 	severity = severity and vim.diagnostic.severity[severity] or nil
 	return function()
-		go({ severity = severity })
+		vim.diagnostic.jump({ count = next and 1 or -1, severity = severity, float = true })
 	end
 end
-
 
 map("n", "<leader>cd", vim.diagnostic.open_float, { desc = "Line Diagnostics" })
 map("n", "]d", diagnostic_goto(true), { desc = "Next Diagnostic" })

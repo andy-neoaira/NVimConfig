@@ -25,11 +25,11 @@ return {
 
 	-- 可选：在插件加载时从自定义目录加载 queries
 	config = function(_, opts)
-		local tsq = require('utils.ts_queries')
+		local tsq = require("utils.ts_queries")
 		-- 使用环境变量 TTS_QUERIES 或默认 ~/.config/nvim/queries_extra
-		local custom = vim.fn.getenv('TTS_QUERIES') or '~/.config/nvim/queries_extra'
+		local custom = vim.env.TTS_QUERIES or (vim.fn.stdpath("config") .. "/queries_extra")
 		tsq.load_dir(custom)
 		-- 然后按常规使用 opts
-		require('treesitter-context').setup(opts)
+		require("treesitter-context").setup(opts)
 	end,
 }
