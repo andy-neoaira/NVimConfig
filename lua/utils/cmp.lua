@@ -7,6 +7,39 @@
 --- 提供原生 snippet 的展开与容错。
 local M = {}
 
+--- Python 符号适度加分，避免同名小写模块挤掉 ChatDeepSeek 等类。
+--- 保留匹配分数主导排序，不改变候选文本或 LSP 的导入编辑。
+---@param ctx {bufnr: integer}
+---@param items table[]
+---@return table[]
+function M.rank_lsp_items(ctx, items)
+	if not vim.api.nvim_buf_is_valid(ctx.bufnr) or vim.bo[ctx.bufnr].filetype ~= "python" then
+		return items
+	end
+	local kinds = vim.lsp.protocol.CompletionItemKind
+	local symbols = {
+		[kinds.Class] = true,
+		[kinds.Constructor] = true,
+		[kinds.Function] = true,
+		[kinds.Method] = true,
+		[kinds.Variable] = true,
+		[kinds.Field] = true,
+		[kinds.Property] = true,
+		[kinds.Constant] = true,
+		[kinds.Enum] = true,
+		[kinds.EnumMember] = true,
+	}
+	return vim.tbl_map(function(item)
+		if not symbols[item.kind] then
+			return item
+		end
+		-- 浅复制避免重复处理缓存候选时累计加分。
+		local ranked = vim.tbl_extend("force", {}, item)
+		ranked.score_offset = (item.score_offset or 0) + 12
+		return ranked
+	end, items)
+end
+
 --- 动作集合：与补全引擎解耦的通用动作（供键位链式调用）
 --- 返回 true 表示已处理，返回 false/nil 表示未处理，交由下一个分支或 fallback
 M.actions = {

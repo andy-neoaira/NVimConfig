@@ -88,6 +88,50 @@ local ok, err = xpcall(function()
 	assert(render.get() == was_enabled, "Markdown 开关未恢复")
 	GlobalUtil.format.resolve()
 	assert(#GlobalUtil.format.formatters == 2, "格式化入口应只注册 Conform 与 LSP")
+	-- 使用真实匹配器验证截图中的排序，同时保护其他语言与 LSP 编辑内容。
+	do
+		local config = require("blink.cmp.config")
+		local fuzzy = require("blink.cmp.fuzzy")
+		local kinds = vim.lsp.protocol.CompletionItemKind
+		local buf = vim.api.nvim_create_buf(false, true)
+		vim.bo[buf].filetype = "python"
+		local ctx = { bufnr = buf }
+		local transform = config.sources.providers.lsp.transform_items
+		local edits = { { newText = "from models import ChatDeepSeek\n" } }
+		local original = {
+			{ label = "chat", kind = kinds.Module },
+			{ label = "chat_models", kind = kinds.Module },
+			{ label = "ChatDeepSeek", kind = kinds.Class, additionalTextEdits = edits },
+		}
+		local ranked = transform(ctx, original)
+		assert(original[3].score_offset == nil, "排序不能修改原始缓存候选")
+		assert(ranked[3].additionalTextEdits == edits, "排序必须保留自动导入编辑")
+		assert(transform(ctx, original)[3].score_offset == ranked[3].score_offset, "重复处理不能累计加分")
+		for _, query in ipairs({ "chat", "Chat", "CHAT", "chatdeepseek" }) do
+			local result = fuzzy.fuzzy(query, #query, {
+				lsp = ranked,
+				copilot = {
+					{
+						label = "chat = ChatDeepSeek(",
+						source_id = "copilot",
+						score_offset = config.sources.providers.copilot.score_offset,
+					},
+				},
+			}, "prefix")
+			assert(result[1].source_id == "copilot", query .. " 应优先显示 AI 候选")
+			assert(result[2].label == "ChatDeepSeek", query .. " 的 LSP 候选应优先显示类")
+			local lsp_only = fuzzy.fuzzy(query, #query, { lsp = ranked }, "prefix")
+			assert(lsp_only[1].label == "ChatDeepSeek", "没有 AI 候选时类应排第一")
+		end
+		ranked[#ranked + 1] = transform(ctx, { { label = "chat", kind = kinds.Variable } })[1]
+		assert(
+			fuzzy.fuzzy("chat", 4, { lsp = ranked }, "prefix")[1].kind == kinds.Variable,
+			"完全匹配变量仍应优先"
+		)
+		vim.bo[buf].filetype = "lua"
+		assert(transform(ctx, original) == original, "不能改变其他语言的 LSP 排序加分")
+		vim.api.nvim_buf_delete(buf, { force = true })
+	end
 	for _, lang in ipairs({ "json", "json5" }) do
 		for _, file in ipairs(vim.fn.globpath("queries/" .. lang, "*.scm", false, true)) do
 			vim.treesitter.query.parse(lang, table.concat(vim.fn.readfile(file), "\n"))

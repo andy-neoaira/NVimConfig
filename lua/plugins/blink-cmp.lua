@@ -73,6 +73,17 @@ return {
 				-- 若二进制缺失（如首次安装、架构不匹配）会打印警告。
 				-- 显式指定 "lua" 可消除警告，性能差异在日常使用中可忽略
 				implementation = "lua",
+				-- 匹配到的 AI 候选置顶；各组内部继续按匹配分数与 LSP 排序。
+				sorts = {
+					function(a, b)
+						local a_ai, b_ai = a.source_id == "copilot", b.source_id == "copilot"
+						if a_ai ~= b_ai then
+							return a_ai
+						end
+					end,
+					"score",
+					"sort_text",
+				},
 			},
 
 			-- ── 补全行为配置 ───────────────────────────────────
@@ -316,6 +327,9 @@ return {
 					lsp = {
 						name = "lsp",
 						module = "blink.cmp.sources.lsp",
+						transform_items = function(ctx, items)
+							return GlobalUtil.cmp.rank_lsp_items(ctx, items)
+						end,
 						-- 限制 LSP 候选数量：部分语言服务器（Java/PHP）会返回大量候选，
 						-- 限制 80 个可有效缩短渲染时间，配合 list.max_items 双重保障
 						max_items = 80,
@@ -340,8 +354,8 @@ return {
 						enabled = function()
 							return vim.bo.filetype ~= "markdown"
 						end,
-						-- 提高排序分数，确保 Copilot 建议优先显示。
-						score_offset = 100,
+						-- 置顶由 fuzzy.sorts 控制，无需额外加分。
+						score_offset = 0,
 						async = true,
 					},
 
