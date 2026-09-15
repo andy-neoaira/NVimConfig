@@ -1,110 +1,108 @@
-AGENTS
-======
+# AGENTS
 
-目的
-----
-- 这个文档供自动化/代理式编码代理（agentic coding agents）在本仓库工作时参考：如何构建、格式化、运行单测，以及代码风格/约定。
-- 文件位置：`AGENTS.md`（仓库根目录）。
+## 目的与协作
 
-快速命令（在仓库根目录执行）
---------------------------------
-- 运行所有格式化器（如果你使用系统工具）：
-  - `stylua .` （格式化 Lua 文件，需安装 `stylua`）
-  - `prettier --write "**/*.{js,ts,json,md,css,scss,html,mdx,json5}"` （格式化 JS/TS/JSON/Markdown 等）
-  - 或使用 `conform`：在 Neovim 环境中，通过插件自动运行（仓库中使用 `conform.nvim` 注册）。
-- 运行 linters/诊断（工具依赖本机安装或 mason 管理）：
-  - `luacheck .`（如果项目使用 luacheck）
-  - `markdownlint-cli2 README.md`（markdown lint）
+- 本文件供在仓库内工作的编码代理参考；所有对话尽量使用中文。
+- 这是个人 Neovim Lua 配置，没有独立应用构建步骤。以实际代码和 `lazy-lock.json` 为依据，不把历史报告当作当前状态。
+- 修改前查看 `git status --short` 和相关 diff，保留用户已有改动。审查请求先报告可复现的问题、位置和影响；没有证据时不要为凑数量推断缺陷。
+- 只修改任务相关文件。不要未经询问批量改写文件或重写格式工具配置；先检查并报告现状。
 
-测试（本仓库为 Neovim 配置，测试支持推荐）
-------------------------------------------------
-- Neovim 内运行（neotest）：
-  - 运行文件：在 Neovim 中 `:lua require('neotest').run.run(vim.fn.expand('%'))` 或 快捷键 `<leader>tf`（已在 keymaps 注册）
-  - 运行最近：`require('neotest').run.run_last()`（若配置启用）
-  - 运行最近失败：`require('neotest').run.run_last({strategy = 'dap'})`（示例）
-- 在外部终端运行单个 Python 测试（pytest）：
-  - 按测试函数名过滤：`pytest -q -k "TestNameOrExpression"`  
-  - 按文件和测试名定位：`pytest path/to/test_file.py::test_function_name -q`  
-- 在外部终端运行单个 Vitest（Node/TS）：
-  - 使用 npx/npm/pnpm：`npx vitest -t "test name or regexp"` 或 `pnpm vitest -t "pattern"`
-- Lua 单测（如果使用 plenary/busted）：
-  - plenary（Neovim 插件测试）：在 Neovim 中运行 `:lua require('plenary.test_harness').test_directory('path/to/tests')` 或使用 neotest 集成
-  - busted（如果项目使用）：`busted path/to/test.lua:LINE` 或 `busted -g "pattern"`
+## 环境与启动
 
-如何运行单个测试（常用示例）
---------------------------------
-- pytest 单测定位（最确定）：
-  - `pytest path/to/test_file.py::TestClass::test_method -q`
-- pytest 按关键字：
-  - `pytest -k "something" -q` （匹配测试名或父类名）
-- vitest：
-  - `npx vitest -t "should compute X"`（测试名匹配）
-- neotest（在 Neovim 内运行某一行/最近）：
-  - `:lua require('neotest').run.run()`（运行光标所在的最近测试）
+- 当前配置要求 **Neovim 0.12+**，版本检查位于 `lua/config/init.lua`。
+- 启动链路：`init.lua` → `require("config")` → leader 与基础选项 → lazy.nvim 引导 → `_G.GlobalUtil` → 插件 setup → 自动命令与通用键位 → 根目录初始化。
+- lazy.nvim 缺失时会通过 Git 下载；普通启动不自动安装缺失插件、不检查插件更新，也不刷新 Mason 注册表或下载解析器。
+- 显式安装入口：`:Lazy install`（完成后重启）、`:ToolsInstall`、`:TSInstallConfigured`。只有任务涉及安装或升级时才执行，检查配置不需要先升级依赖。
+- `lazy-lock.json` 是插件版本依据；不要随普通修改运行 `:Lazy update`。恢复锁定版本使用 `:Lazy restore`。
+- `dev = true` 的插件使用 `~/github` 下的本地开发目录；验证相关配置时检查本地插件是否存在。
+- 搜索依赖 ripgrep、fd；解析器编译依赖 C 工具链和 tree-sitter CLI；外部格式化器、LSP 和调试工具按语言准备。
 
-仓库特殊说明
-----------------
-- 这是个人 Neovim 配置（Lua），入口 `init.lua`，插件配置放在 `lua/plugins/`，工具模块在 `lua/utils/`。
-- 格式化器在 `lua/plugins/conform.lua` 中注册，推荐使用 `stylua`（Lua）与 `prettier`（前端、json、markdown 等）。
-- 全局工具对象：`_G.GlobalUtil`（定义于 `lua/utils/init.lua`），agents 在修改或调用全局工具时请保持谨慎并优先使用 `GlobalUtil` 提供的 API。
-- 测试/调试：仓库集成 `neotest`、`nvim-dap` 等，Neovim 内快捷键映射已在 `lua/config/keymaps.lua` 注册（例如 `<leader>tt`, `<leader>tf` 等）。
+## 目录与职责
 
-代码风格与约定（Lua 重点）
----------------------------------
-- 文件与模块：
-  - 模块统一返回一个 table（例如 `local M = {}` / `return M`）。
-  - 模块名对应路径（`lua/foo/bar.lua` -> `require('foo.bar')`）。
-  - 在模块顶部使用 `local` 引入依赖：`local util = require('utils.something')`。
-- 命名约定：
-  - 模块表命名为 `M`。模块内部函数和字段使用 `snake_case` 或 `camel_case_with_underscores`（仓库示例多用 `get_pkg_path`, `safe_keymap_set`），保持一致性即可，优先遵循现有代码风格（使用下划线分隔单词）。
-  - 常量或全局常量使用大写或 Pascal（`CREATE_UNDO` 在仓库已使用）。
-  - 局部变量使用 `local`，避免污染全局作用域。
-- 函数与注释：
-  - 使用 EmmyLua 注释（`---@param`, `---@return`, `---@class`, `---@generic` 等）为 LSP 提供类型提示，参见 `lua/types.lua` 和库内注释样式。
-  - 复杂函数在顶部添加简短中文注释，说明职责与边界条件。
-- 错误处理：
-  - 优先使用 `pcall(require, ...)` 或 `pcall(fn)` 捕获可预期的模块加载或运行错误，并在失败时优雅退回（不要让整个 Neovim 崩溃）。
-  - 使用 `assert` 仅用于致命错误或开发断言，生产路径请返回 `nil` + 错误信息或调用 `GlobalUtil.warn/error(...)`。
-  - 不要静默吞掉异常；记录/通知（`GlobalUtil.warn/error` 或 `vim.notify`）有助于排查。
-- 导入/require 的使用：
-  - 在文件顶部进行 `local mod = require('...')`，避免在循环或热路径里重复 require。
-  - 对于可选依赖使用 `local ok, mod = pcall(require, 'mod')` 并在 `ok` 为 false 时 fallback。
-  - utils 模式：`lua/utils/init.lua` 使用元表延迟加载（懒加载），agent 在新增工具模块时应遵循该模式以保持一致。
-- 格式化与风格工具：
-  - Lua：`stylua` 作为首选格式化工具；在需要特殊对齐或忽略时使用 `-- stylua: ignore` 或 `-- stylua: ignore start/stop`。
-  - JS/TS/JSON/Markdown：`prettier`（`--write`）。
-  - conform.nvim：仓库中通过 `conform` 集成多种格式化器，prefer 用项目配置而不是手动格式化所有文件。
-- 代码组织与粒度：
-  - 小模块、专一原则：每个 `lua/plugins/*.lua` 文件返回一个 lazy.nvim 插件 spec；每个 `lua/utils/*.lua` 提供一组相关工具。
-  - 避免过大的文件；将不相关的功能拆分成独立模块。
-- 日志与提示：
-  - 使用 `GlobalUtil.info/warn/error` 包裹通知（这些封装了标题与一致的行为），不要直接大量使用 `print`。
+| 路径 | 职责 |
+| --- | --- |
+| `init.lua`、`lua/config/init.lua` | 入口、启动顺序与 lazy.nvim 配置 |
+| `lua/config/options.lua` | 基础选项 |
+| `lua/config/autocmds.lua` | 自动保存、文件事件、根缓存失效等 |
+| `lua/config/keymaps.lua` | 通用键位；插件专属键位也分布在插件 spec 中 |
+| `lua/plugins/*.lua` | 返回一个 lazy.nvim 插件 spec 或 spec 列表 |
+| `lua/utils/init.lua` | 全局工具、元表懒加载及 Lazy 工具封装 |
+| `lua/utils/lsp_options.lua`、`lsp_keymaps.lua` | 语言服务器选项与附加到缓冲区的 LSP 键位 |
+| `lua/utils/buffer.lua`、`format.lua` | 自动保存与格式化入口、开关、优先级 |
+| `lua/utils/root.lua`、`python.lua` | 项目根目录与 Python 解释器解析 |
+| `lua/utils/input_method.lua`、`image.lua` | 输入法异步 IPC 与 Snacks 图片兼容适配 |
+| `queries/` | JSON/JSON5 自定义 Treesitter 查询 |
+| `tests/`、`scripts/check.sh` | 仓库自身的回归验证 |
 
-Pull Request / Commit 建议
----------------------------
-- 小而频繁的提交；每次提交只做一件事（修复、功能、样式）。
-- 提交信息使用中文简短前缀，例如 `feat(...)`, `fix(...)`, `chore(...)` 并在正文简述为什么要改动。
+`lua/config/` 是执行配置的模块，不要求返回插件 spec；`lua/utils/` 通常返回模块表。不要把插件 spec 的约定套用到所有 Lua 文件。
 
-Cursor 规则
------------
-- Cursor 规则：在仓库中未发现 `.cursor/rules/` 或 `.cursorrules`，因此没有额外的 Cursor-specific 指令需要包含。
+## 验证命令
 
-行为准则（agent 专用）
-----------------------
-- 不要在未询问的情况下修改大量文件或重写风格工具配置；先运行并报告现状。
-- 若要新增依赖或更改工具（例如把 `stylua` 换为其他格式器），先在 PR 中说明理由与回退方案。
-- 修改 `lua/plugins/` 或 `lua/config/` 时保持 lazy.nvim 的约定（文件返回 plugin spec）；不要把副作用放在 module 顶部（除非必要）。
-- 测试策略：对功能性修改，优先在本地用 `neotest`/`pytest`/`vitest` 验证；对格式化/样式改动，运行格式化工具并确保 no changes in unrelated files。
+在仓库根目录运行完整检查：
 
-后续建议（可选）
--------------------
-1. 添加 `Makefile` 或 `./scripts` 目录，集中封装常用命令：`make fmt`, `make lint`, `make test TEST=path::name`。
-2. 在仓库根放 `stylua.toml` 与 `.prettierrc` 明确团队格式规则。
-3. 若希望 agents 自动运行测试并提交结果，添加 CI（GitHub Actions）步骤：`fmt/lint/test`。
+```sh
+sh scripts/check.sh
+```
 
-附：关键参考文件
------------------
-- `init.lua`（仓库入口）
-- `lua/config/*`（启动配置）
-- `lua/plugins/*`（插件配置，必须返回 lazy spec）
-- `lua/utils/init.lua`（全局工具与懒加载实现）
+前提：`nvim` 和 `stylua` 在 PATH 中，配置所需插件（包括 lazy.nvim）以及 JSON/JSON5 解析器已经安装。脚本依次执行：
+
+1. `stylua --check lua tests init.lua`。
+2. `tests/core.lua`：格式化开关、根目录边界、自动保存、未保存内容保护。
+3. `tests/async.lua`：输入法时序、跨缓冲区诊断、图片异步结果失效。
+4. `tests/integration.lua`：已安装插件的配置加载、键位、真实保存格式化、Markdown 开关和查询语法。
+5. `git diff --check`。
+
+脚本通过临时目录隔离 `XDG_STATE_HOME`、`XDG_CACHE_HOME`、`NVIM_LOG_FILE`，复用现有插件数据；结束后保留诊断目录。不要删除个人插件、会话或历史来处理测试失败。
+
+只运行核心或异步测试时，可使用不加载个人配置的命令：
+
+```sh
+nvim --headless -u NONE -i NONE -l tests/core.lua
+nvim --headless -u NONE -i NONE -l tests/async.lua
+```
+
+集成检查优先通过 `scripts/check.sh` 运行，保留状态隔离。注意验证边界：
+
+- 核心与异步测试使用临时文件或桩；输入法相关断言仅在 macOS 执行。
+- 集成测试禁用 Copilot 补全，不发送 AI 聊天请求；不能证明真实 AI、LSP、DAP 会话可用。
+- 单独运行集成脚本时，若没有 StyLua，会跳过真实格式化断言；完整检查脚本则要求 StyLua 存在。
+- 终端图片显示、真实 Hammerspoon 切换和各语言项目仍需按改动进行实际验收。
+- 缺少依赖时报告缺失项和未验证范围，不把跳过检查描述为通过。
+
+### 编辑项目的测试快捷键
+
+这些快捷键用于 Neovim 中打开的 Python/Vitest 项目，不是本仓库的 Lua 回归入口：
+
+- `lua/plugins/neotest.lua`：`<leader>tt` 运行光标附近测试，`<leader>tf` 运行文件，`<leader>tF` 运行工作目录下测试。
+- `lua/plugins/dap.lua`：`<leader>td` 调试光标附近测试。
+- `require("neotest").run.run_last()` 重跑上次测试；`run_last({ strategy = "dap" })` 是调试上次测试，不是筛选上次失败项。`<leader>tl` 当前被注释。
+- 目标项目中可用 `pytest path/to/test_file.py::test_function_name -q` 或 `npx vitest -t "test name"`；本仓库没有对应的 pytest/Vitest 测试套件。
+
+## 格式与代码约定
+
+- Lua 遵循现有 StyLua 风格（通常为 Tab 缩进、双引号）。局部修改使用 `stylua path/to/changed.lua`，避免全仓库重排。保留有意设置的 `-- stylua: ignore`。
+- 仓库当前没有专用 StyLua/Prettier 配置文件；不要为文档或小修复引入新的风格配置、依赖或锁文件。
+- Markdown/JSON 等可使用已安装的 Prettier 格式化改动文件；`scripts/check.sh` 不检查 Markdown 排版。不把 `luacheck`、markdownlint 或未配置的 CI 当作现有必经流程。
+- 模块表通常命名 `M`，变量和函数沿用所在模块的命名方式，优先下划线命名。使用 `local`，避免新增全局。
+- 工具模块路径对应 require 名，例如 `lua/utils/python.lua` → `require("utils.python")`。新增工具沿用 `GlobalUtil` 的元表懒加载，不另建全局入口。
+- 用 EmmyLua/LuaLS 注解描述参数和返回值；复杂逻辑写简短中文注释，解释职责、时序和边界。
+- 稳定依赖可在模块顶部引入；懒加载插件应在 `opts`、`config`、事件或键位回调中 require，避免提前加载。插件副作用放入 lazy 生命周期回调。
+- 可预期失败使用 `pcall` 和明确回退；通过 `GlobalUtil.info/warn/error` 或合适的 `vim.notify_once` 报告问题，不静默吞掉重要异常。
+- 自动命令使用有名称且 `clear = true` 的分组；异步回调重新检查缓冲区有效性和状态，避免旧结果覆盖新操作，释放计时器等资源。
+
+## 修改时需保持的行为
+
+- **保存**：默认自动保存；`TextChanged` 合并为 200ms 后写入，`InsertLeave`、`FocusLost` 直接尝试保存。保护只读、特殊、未命名、URI 和未修改缓冲区，不用强制删除丢弃未保存内容。
+- **开关**：`vim.g.autosave = false` 是自动保存总开关；自动格式化由缓冲区 `vim.b.autoformat` 优先覆盖全局 `vim.g.autoformat`，`nil` 表示继承。手动 `<leader>cf` 强制格式化。
+- **格式化**：外部工具统一由 `lua/plugins/conform.lua` 调度，保存同步完成，工具不可用时回退 LSP；不要添加第二条保存格式化链路。
+- **LSP/Treesitter**：沿用当前 `vim.lsp.config` / `vim.lsp.enable` 及 Treesitter FileType 配置，不直接粘贴旧版 setup API。工具安装与服务器启用保持分离。
+- **根目录**：保留路径边界检查、缓冲区缓存失效与切换成功后才更新状态的约定；不要用任意字符串前缀判断目录包含关系。
+- **Python**：测试和调试目标解释器复用 `utils.python.resolve`，按激活环境、项目 `.venv`/`venv`、系统解释器解析，不缓存跨项目结果。
+- **可选集成**：Java LSP 默认关闭（`vim.g.java_lsp`）；输入法切换仅在 macOS、有 UI 且 `hs` 可执行时启用。图片兼容代码依赖 Snacks 内部实现，升级相关插件需检查该适配与异步回归。
+- **凭据**：CopilotChat 的自定义提供方读取 `NVIM_AI_API_KEY`，不把密钥写入文件或日志。验证时不触发认证或发送聊天内容。
+
+## 交付
+
+- 功能修改执行相关回归，必要时补充能覆盖故障触发条件的测试；文档修改检查内容与源码一致、链接正确及 diff 空白错误。
+- 新增依赖或更换工具时说明理由与回退方案。未经任务要求不自动提交、升级或发布。
+- 汇报实际改动、检查结果和未覆盖范围。提交信息可用 `feat(...)`、`fix(...)`、`chore(...)` 等前缀，搭配简短中文说明。
