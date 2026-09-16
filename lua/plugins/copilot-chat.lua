@@ -6,6 +6,14 @@ local function moonshot_api_key()
 	return key:gsub("^%s*[Bb]earer%s+", ""):gsub("%s+$", "")
 end
 
+local function volcano_api_key()
+	local key = vim.env.NVIM_VOLCE_AI_API_KEY
+	if type(key) ~= "string" or key == "" then
+		error("未设置环境变量 NVIM_VOLCE_AI_API_KEY")
+	end
+	return key:gsub("^%s*[Bb]earer%s+", ""):gsub("%s+$", "")
+end
+
 return {
 	{
 		"zbirenbaum/copilot.lua",
@@ -41,9 +49,9 @@ return {
 			local provider_helpers = require("CopilotChat.config.providers")
 
 			return {
-				model = "kimi-k2.7-code",
+				model = "glm-5.3",
 				providers = {
-					-- Copilot 仅用于代码补全；CopilotChat 固定通过 Moonshot API 请求 Kimi。
+					-- Copilot 仅用于代码补全；CopilotChat 通过第三方 OpenAI 兼容 API 请求模型。
 					copilot = { disabled = true },
 					moonshot = {
 						get_url = function()
@@ -75,6 +83,43 @@ return {
 						prepare_output = function(output, opts)
 							local response = provider_helpers.copilot.prepare_output(output, opts)
 							-- Kimi 的思考过程不写入 CopilotChat，只显示最终答案。
+							response.reasoning = nil
+							return response
+						end,
+					},
+					-- 火山方舟 Coding Plan：必须使用 /api/coding/v3 端点与套餐模型名，按订阅额度抵扣。
+					volcano = {
+						get_url = function()
+							return "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"
+						end,
+						get_headers = function()
+							return {
+								Authorization = "Bearer " .. volcano_api_key(),
+								["Content-Type"] = "application/json",
+							}
+						end,
+						get_models = function()
+							return {
+								{
+									id = "glm-5.3-flash",
+									name = "GLM-5.3-Flash (Coding Plan)",
+									streaming = true,
+									tools = true,
+								},
+								{
+									id = "glm-5.3",
+									name = "GLM-5.3 (Coding Plan)",
+									streaming = true,
+									tools = true,
+								},
+							}
+						end,
+						prepare_input = function(inputs, opts)
+							return provider_helpers.copilot.prepare_input(inputs, opts)
+						end,
+						prepare_output = function(output, opts)
+							local response = provider_helpers.copilot.prepare_output(output, opts)
+							-- GLM 的思考过程不写入 CopilotChat，只显示最终答案。
 							response.reasoning = nil
 							return response
 						end,
@@ -188,14 +233,26 @@ return {
 				function()
 					local chat = require("CopilotChat")
 					local select = require("CopilotChat.select")
+					local win = vim.api.nvim_get_current_win()
+					local win_height = vim.api.nvim_win_get_height(win)
+					local cursor = vim.api.nvim_win_get_cursor(win)
+					local textoff = vim.fn.getwininfo(win)[1].textoff
+					-- inline 浮窗按当前窗口实际尺寸定位，避开侧边栏与行号列；
+					-- 光标贴近底部时改为在光标上方展开，保证输入栏可见。
+					local height = math.max(10, math.floor(win_height * 0.4))
+					local row = cursor[1]
+					if row + height > win_height then
+						row = math.max(1, cursor[1] - height - 1)
+					end
 					chat.ask("解释这部分代码", {
 						selection = select.visual,
 						window = {
 							layout = "float",
-							relative = "cursor",
-							width = 1,
-							height = 0.4,
-							row = 1,
+							relative = "win",
+							width = vim.api.nvim_win_get_width(win) - textoff,
+							height = height,
+							row = row,
+							col = textoff,
 						},
 					})
 				end,

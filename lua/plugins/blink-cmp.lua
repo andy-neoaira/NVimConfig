@@ -378,12 +378,18 @@ return {
 				keymap = {
 					-- 使用内置 "cmdline" 预设（<Tab>/<S-Tab> 循环候选，<CR> 确认）
 					preset = "cmdline",
+					-- cmdline 预设不包含上下方向键；菜单可见时用于选择候选，
+					-- 菜单不可见时回退到 Neovim 的命令历史导航。
+					["<Down>"] = { "select_next", "fallback" },
+					["<Up>"] = { "select_prev", "fallback" },
 					-- 禁用 <Right>/<Left> 在菜单中的选择行为：
 					-- 命令行中方向键应用于光标移动，而非候选选择
 					["<Right>"] = false,
 					["<Left>"] = false,
 				},
 				completion = {
+					-- blink 默认只在命令行窗口自动显示；普通 :、/、? 输入也自动弹出菜单。
+					menu = { auto_show = true },
 					list = {
 						selection = {
 							-- 命令行补全不自动预选第一项：

@@ -92,6 +92,15 @@ local ok, err = xpcall(function()
 	do
 		local config = require("blink.cmp.config")
 		local fuzzy = require("blink.cmp.fuzzy")
+		assert(config.cmdline.completion.menu.auto_show == true, "命令行补全菜单应自动显示")
+		assert(
+			vim.fn.maparg("<Up>", "c", false, true).desc == "blink.cmp: Select Prev",
+			"命令行上方向键未绑定上一项"
+		)
+		assert(
+			vim.fn.maparg("<Down>", "c", false, true).desc == "blink.cmp: Select Next",
+			"命令行下方向键未绑定下一项"
+		)
 		local kinds = vim.lsp.protocol.CompletionItemKind
 		local buf = vim.api.nvim_create_buf(false, true)
 		vim.bo[buf].filetype = "python"
