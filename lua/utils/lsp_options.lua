@@ -129,6 +129,9 @@ function M.get()
 					basedpyright = {
 						analysis = {
 							typeCheckingMode = "basic",
+							diagnosticSeverityOverrides = {
+								reportReturnType = "warning",
+							},
 						},
 					},
 				},
