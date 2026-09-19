@@ -28,10 +28,9 @@ map("i", "<A-k>", "<esc><cmd>m .-2<cr>==gi", { desc = "Move Up" })
 map("v", "<A-j>", ":<C-u>execute \"'<,'>move '>+\" . v:count1<cr>gv=gv", { desc = "Move Down" })
 map("v", "<A-k>", ":<C-u>execute \"'<,'>move '<-\" . (v:count1 + 1)<cr>gv=gv", { desc = "Move Up" })
 
-map({ "n", "i" }, "<C-e>", function()
-	Snacks.explorer()
-	vim.cmd("stopinsert")
-end, { desc = "Explorer", remap = true })
+-- Emacs 风格光标移动：Ctrl+a 行首、Ctrl+e 行尾
+map({ "n", "v" }, "<C-a>", "^", { desc = "行首" })
+map({ "n", "v" }, "<C-e>", "$", { desc = "行尾" })
 
 map("n", "<leader>e", function()
 	Snacks.explorer()
@@ -115,6 +114,9 @@ map("n", "]q", vim.cmd.cnext, { desc = "Next Quickfix" })
 
 -- formatting
 map({ "n", "v" }, "<leader>cf", function()
+	GlobalUtil.format({ force = true })
+end, { desc = "Format" })
+map({ "n", "v" }, "<D-S-l>", function()
 	GlobalUtil.format({ force = true })
 end, { desc = "Format" })
 

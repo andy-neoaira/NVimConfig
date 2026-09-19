@@ -15,28 +15,28 @@ local function volcano_api_key()
 end
 
 return {
-	{
-		"zbirenbaum/copilot.lua",
-		cmd = "Copilot",
-		enabled = true,
-		-- 认证由用户显式执行 :Copilot auth，安装/更新插件不打开授权流程。
-		event = "BufReadPost",
-		opts = {
-			suggestion = {
-				enabled = false,
-				auto_trigger = true,
-				hide_during_completion = true,
-				keymap = {
-					accept = false,
-				},
-			},
-			panel = { enabled = false },
-			filetypes = {
-				markdown = false,
-				help = true,
-			},
-		},
-	},
+	-- {
+	-- 	"zbirenbaum/copilot.lua",
+	-- 	cmd = "Copilot",
+	-- 	enabled = true,
+	-- 	-- 认证由用户显式执行 :Copilot auth，安装/更新插件不打开授权流程。
+	-- 	event = "BufReadPost",
+	-- 	opts = {
+	-- 		suggestion = {
+	-- 			enabled = false,
+	-- 			auto_trigger = true,
+	-- 			hide_during_completion = true,
+	-- 			keymap = {
+	-- 				accept = false,
+	-- 			},
+	-- 		},
+	-- 		panel = { enabled = false },
+	-- 		filetypes = {
+	-- 			markdown = false,
+	-- 			help = true,
+	-- 		},
+	-- 	},
+	-- },
 	{
 		"CopilotC-Nvim/CopilotChat.nvim",
 		branch = "main",
@@ -202,19 +202,6 @@ return {
 		end,
 		keys = {
 			{ "<c-s>", "<CR>", ft = "copilot-chat", desc = "Submit Prompt", remap = true },
-			{
-				"<C-a>",
-				function()
-					local select = require("CopilotChat.select")
-					local mode = vim.api.nvim_get_mode().mode
-					return require("CopilotChat").toggle(
-						(mode == "v" or mode == "V") and { selection = select.visual } or nil
-					)
-				end,
-				desc = "Toggle (CopilotChat)",
-				remap = true,
-				mode = { "n", "v", "i" },
-			},
 			{ "<leader>a", "", desc = "+ai", mode = { "n", "v" } },
 			{
 				"<leader>aa",

@@ -357,15 +357,6 @@ return {
 				desc = "文件浏览器",
 			},
 			{
-				"<C-e>",
-				function()
-					Snacks.explorer()
-					vim.cmd("stopinsert")
-				end,
-				desc = "文件浏览器",
-				mode = { "n", "i" },
-			},
-			{
 				"<leader><space>",
 				function()
 					Snacks.picker.smart({ filter = { cwd = true } })
