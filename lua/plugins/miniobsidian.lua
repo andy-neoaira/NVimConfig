@@ -17,6 +17,7 @@ return {
 			"ObsidianNewTemplate",
 			"ObsidianPasteImg",
 			"ObsidianToday",
+			"ObsidianScratch",
 			"ObsidianSetup",
 		},
 		keys = {
@@ -177,6 +178,31 @@ return {
 					end
 				end,
 			})
+
+			-- `obs` shell alias：直接打开 Scratchpad（00-Inbox/Scratchpad.md）
+			vim.api.nvim_create_user_command("ObsidianScratch", function(opts)
+				local core = require("miniobsidian")
+				if core.config.vault_path == "" then
+					core.notify("No active vault; run ObsidianSetup first", vim.log.levels.ERROR)
+					return
+				end
+
+				local scratch = core.config.vault_path .. "/00-Inbox/Scratchpad.md"
+				vim.schedule(function()
+					if vim.fn.filereadable(scratch) == 0 then
+						vim.fn.mkdir(vim.fn.fnamemodify(scratch, ":h"), "p")
+						vim.fn.writefile({ "# Scratchpad", "" }, scratch)
+					end
+					vim.cmd("edit " .. vim.fn.fnameescape(scratch))
+					-- 启动阶段的 :edit 可能跳过 filetype 检测，补齐让渲染正常
+					if vim.bo.filetype == "" then
+						vim.bo.filetype = "markdown"
+					end
+					if opts.bang then
+						switch_obsidian_root(core.config.vault_path)
+					end
+				end)
+			end, { bang = true, desc = "Open Scratchpad" })
 		end,
 	},
 
